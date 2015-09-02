@@ -145,7 +145,7 @@ struct ModuleGroup
                                 ctorInCycle = true;
                         }
                         assert(stack[start].mod == m);
-                        if (ctorInCycle)
+                        if (false && ctorInCycle)
                         {
                             /* This is an illegal cycle, no partial order can be established
                              * because the import chain have contradicting ctor/dtor
