@@ -34,14 +34,14 @@ $(mak\SRCS)
 # NOTE: a pre-compiled minit.obj has been provided in dmd for Win32 and
 #       minit.asm is not used by dmd for Linux
 
-OBJS= errno_c.obj src\rt\minit.obj
-OBJS_TO_DELETE= errno_c.obj
+OBJS= errno_c$(MODEL).obj src\rt\minit.obj
+OBJS_TO_DELETE= errno_c$(MODEL).obj
 
 ######################## Doc .html file generation ##############################
 
 doc: $(DOCS)
 
-$(DOCDIR)\object.html : src\object_.d
+$(DOCDIR)\object.html : src\object.d
 	$(DMD) $(DDOCFLAGS) -Df$@ $(DOCFMT) $**
 
 $(DOCDIR)\core_atomic.html : src\core\atomic.d
@@ -164,6 +164,9 @@ $(DOCDIR)\core_sync_rwmutex.html : src\core\sync\rwmutex.d
 $(DOCDIR)\core_sync_semaphore.html : src\core\sync\semaphore.d
 	$(DMD) $(DDOCFLAGS) -Df$@ $(DOCFMT) $**
 
+changelog.html: changelog.dd
+	$(DMD) -Dfchangelog.html changelog.dd
+
 ######################## Header .di file generation ##############################
 
 import: $(IMPORTS)
@@ -207,8 +210,9 @@ copydir: $(IMPDIR)
 
 copy: $(COPY)
 
-$(IMPDIR)\object.di : src\object.di
+$(IMPDIR)\object.d : src\object.d
 	copy $** $@
+	if exist $(IMPDIR)\object.di del $(IMPDIR)\object.di
 
 $(IMPDIR)\core\atomic.d : src\core\atomic.d
 	copy $** $@
@@ -629,8 +633,8 @@ $(IMPDIR)\etc\linux\memoryerror.d : src\etc\linux\memoryerror.d
 
 ################### C\ASM Targets ############################
 
-errno_c.obj : src\core\stdc\errno.c
-	$(CC) -c $(CFLAGS) src\core\stdc\errno.c -oerrno_c.obj
+errno_c$(MODEL).obj : src\core\stdc\errno.c
+	$(CC) -c $(CFLAGS) src\core\stdc\errno.c -o$@
 
 src\rt\minit.obj : src\rt\minit.asm
 	$(CC) -c $(CFLAGS) src\rt\minit.asm
@@ -661,3 +665,8 @@ install: druntime.zip
 clean:
 	del $(DRUNTIME) $(OBJS_TO_DELETE) $(GCSTUB)
 	rmdir /S /Q $(DOCDIR) $(IMPDIR)
+
+auto-tester-build: target
+
+auto-tester-test: unittest
+

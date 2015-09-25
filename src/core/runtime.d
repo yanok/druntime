@@ -42,6 +42,7 @@ private
     extern (C) TraceHandler rt_getTraceHandler();
 
     alias void delegate( Throwable ) ExceptionHandler;
+    extern (C) void _d_print_throwable(Throwable t);
 
     extern (C) void* thread_stackBottom();
 
@@ -332,11 +333,75 @@ struct Runtime
 
 
 private:
+
     // NOTE: This field will only ever be set in a static ctor and should
     //       never occur within any but the main thread, so it is safe to
     //       make it __gshared.
     __gshared ModuleUnitTester sm_moduleUnitTester = null;
 }
+
+/**
+ * Set source file path for coverage reports.
+ *
+ * Params:
+ *  path = The new path name.
+ * Note:
+ *  This is a dmd specific setting.
+ */
+extern (C) void dmd_coverSourcePath(string path);
+
+/**
+ * Set output path for coverage reports.
+ *
+ * Params:
+ *  path = The new path name.
+ * Note:
+ *  This is a dmd specific setting.
+ */
+extern (C) void dmd_coverDestPath(string path);
+
+/**
+ * Enable merging of coverage reports with existing data.
+ *
+ * Params:
+ *  flag = enable/disable coverage merge mode
+ * Note:
+ *  This is a dmd specific setting.
+ */
+extern (C) void dmd_coverSetMerge(bool flag);
+
+/**
+ * Set the output file name for profile reports (-profile switch).
+ * An empty name will set the output to stdout.
+ *
+ * Params:
+ *  name = file name
+ * Note:
+ *  This is a dmd specific setting.
+ */
+extern (C) void trace_setlogfilename(string name);
+
+/**
+ * Set the output file name for the optimized profile linker DEF file (-profile switch).
+ * An empty name will set the output to stdout.
+ *
+ * Params:
+ *  name = file name
+ * Note:
+ *  This is a dmd specific setting.
+ */
+extern (C) void trace_setdeffilename(string name);
+
+/**
+ * Set the output file name for memory profile reports (-profile=gc switch).
+ * An empty name will set the output to stdout.
+ *
+ * Params:
+ *  name = file name
+ * Note:
+ *  This is a dmd specific setting.
+ */
+extern (C) void profilegc_setlogfilename(string name);
 
 ///////////////////////////////////////////////////////////////////////////////
 // Overridable Callbacks
@@ -355,7 +420,7 @@ private:
 extern (C) bool runModuleUnitTests()
 {
     // backtrace
-    version( linux )
+    version( CRuntime_Glibc )
         import core.sys.linux.execinfo;
     else version( OSX )
         import core.sys.osx.execinfo;
@@ -399,12 +464,6 @@ extern (C) bool runModuleUnitTests()
 
     if( Runtime.sm_moduleUnitTester is null )
     {
-        void printErr(in char[] buf)
-        {
-            import core.stdc.stdio : fprintf, stderr;
-            fprintf(stderr, "%.*s", cast(int)buf.length, buf.ptr);
-        }
-
         size_t failed = 0;
         foreach( m; ModuleInfo )
         {
@@ -420,7 +479,7 @@ extern (C) bool runModuleUnitTests()
                     }
                     catch( Throwable e )
                     {
-                        e.toString(&printErr); printErr("\n");
+                        _d_print_throwable(e);
                         failed++;
                     }
                 }
@@ -443,7 +502,7 @@ extern (C) bool runModuleUnitTests()
 Throwable.TraceInfo defaultTraceHandler( void* ptr = null )
 {
     // backtrace
-    version( linux )
+    version( CRuntime_Glibc )
         import core.sys.linux.execinfo;
     else version( OSX )
         import core.sys.osx.execinfo;
@@ -517,7 +576,7 @@ Throwable.TraceInfo defaultTraceHandler( void* ptr = null )
                     //       mangled function names.
                     static enum FIRSTFRAME = 5;
                 }
-                else
+                else version( Windows )
                 {
                     // NOTE: On Windows, the number of frames to exclude is based on
                     //       whether the exception is user or system-generated, so
@@ -581,7 +640,7 @@ Throwable.TraceInfo defaultTraceHandler( void* ptr = null )
                         }
                     }
                 }
-                else version( linux )
+                else version( CRuntime_Glibc )
                 {
                     // format is:  module(_D6module4funcAFZv) [0x00000000]
                     // or:         module(_D6module4funcAFZv+0x78) [0x00000000]
@@ -670,7 +729,7 @@ Throwable.TraceInfo defaultTraceHandler( void* ptr = null )
         {
             static enum FIRSTFRAME = 4;
         }
-        else
+        else version (Win32)
         {
             static enum FIRSTFRAME = 0;
         }
