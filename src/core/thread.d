@@ -47,6 +47,14 @@ version( Solaris )
 // this should be true for most architectures
 version = StackGrowsDown;
 
+// On Posix (excluding OSX), pthread_key_t is explicitly used to store and
+// access thread reference. This is needed to avoid TLS access in signal
+// handlers (malloc deadlock) when using shared libraries, see issue 11981.
+//
+// This becomes obsolete with the a rewrite of the related code in 2.069:
+// https://github.com/D-Programming-Language/druntime/pull/1422
+version ( Posix ) version ( Shared ) version = UsePthreadTlsForThreadThis;
+
 /**
  * Returns the process ID of the calling process, which is guaranteed to be
  * unique on the system. This call is always successful.
@@ -1141,7 +1149,7 @@ class Thread
         {
             return sm_this;
         }
-        else version( Posix )
+        else version( UsePthreadTlsForThreadThis )
         {
             auto t = cast(Thread) pthread_getspecific( sm_this );
             return t;
@@ -1382,12 +1390,8 @@ private:
     {
         static Thread       sm_this;
     }
-    else version( Posix )
+    else version( UsePthreadTlsForThreadThis )
     {
-        // On Posix (excluding OSX), pthread_key_t is explicitly used to
-        // store and access thread reference. This is needed
-        // to avoid TLS access in signal handlers (malloc deadlock)
-        // when using shared libraries, see issue 11981.
         __gshared pthread_key_t sm_this;
     }
     else version( Windows )
@@ -1461,7 +1465,7 @@ private:
         {
             sm_this = t;
         }
-        else version( Posix )
+        else version( UsePthreadTlsForThreadThis )
         {
             pthread_setspecific( sm_this, cast(void*) t );
         }
@@ -2005,8 +2009,11 @@ extern (C) void thread_init()
         status = sem_init( &suspendCount, 0, 0 );
         assert( status == 0 );
 
-        status = pthread_key_create( &Thread.sm_this, null );
-        assert( status == 0 );
+        version( UsePthreadTlsForThreadThis )
+        {
+            status = pthread_key_create( &Thread.sm_this, null );
+            assert( status == 0 );
+        }
     }
     else version( Windows )
     {
@@ -2029,7 +2036,7 @@ extern (C) void thread_term()
     version( OSX )
     {
     }
-    else version( Posix )
+    else version( UsePthreadTlsForThreadThis )
     {
         pthread_key_delete( Thread.sm_this );
     }
