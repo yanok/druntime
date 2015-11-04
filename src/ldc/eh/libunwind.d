@@ -9,9 +9,13 @@ version (Win64) {} else
 
 // debug = EH_personality;
 // debug = EH_personality_verbose;
+// debug = EH_verifyExceptionStructLifetime;
 
 import core.stdc.stdlib : malloc, free;
 import ldc.eh.common;
+import ldc.eh.fixedpool;
+debug (EH_personality)
+    import core.stdc.stdio : printf;
 
 private:
 
@@ -110,6 +114,8 @@ struct _d_exception
         _Unwind_Exception unwind_info;
     }
 }
+
+static FixedPool!(_d_exception, 8) ExceptionStructPool;
 
 // the 8-byte string identifying the type of exception
 // the first 4 are for vendor, the second 4 for language
@@ -217,7 +223,8 @@ struct NativeContext
         if (!(actions & _Unwind_Action.CLEANUP_PHASE))
             fatalerror("Unknown phase");
 
-        pushCleanupBlockRecord(getCfaAddress(), getThrownObject());
+        auto cleanupBlock = pushCleanupBlockRecord(getCfaAddress(), getThrownObject());
+        cleanupBlock.exceptionStruct = exception_struct;
 
         debug(EH_personality)
         {
@@ -240,7 +247,8 @@ struct NativeContext
         if (actions & _Unwind_Action.SEARCH_PHASE)
             return _Unwind_Reason_Code.CONTINUE_UNWIND;
 
-        pushCleanupBlockRecord(getCfaAddress(), getThrownObject());
+        auto cleanupBlock = pushCleanupBlockRecord(getCfaAddress(), getThrownObject());
+        cleanupBlock.exceptionStruct = exception_struct;
 
         debug(EH_personality)
         {
@@ -252,6 +260,11 @@ struct NativeContext
         _Unwind_SetGR(context, eh_selector_regno, 0);
         _Unwind_SetIP(context, landingPadAddr);
         return _Unwind_Reason_Code.INSTALL_CONTEXT;
+    }
+
+    void destroyExceptionStruct(void* exception_struct)
+    {
+        _d_eh_destroy_exception_struct(exception_struct);
     }
 }
 
@@ -397,7 +410,16 @@ else // !ARM
 
 extern(C) Throwable.TraceInfo _d_traceContext(void* ptr = null);
 
+debug (EH_verifyExceptionStructLifetime)
+{
+    shared size_t exceptionStructsInFlight;
 
+    shared static ~this()
+    {
+        if (exceptionStructsInFlight != 0)
+            fatalerror("Non-zero number of exception structs in flight: %zu", exceptionStructsInFlight);
+    }
+}
 
 public extern(C):
 
@@ -415,7 +437,7 @@ void _d_throw_exception(Object e)
     if (throwable.info is null && cast(byte*)throwable !is typeid(throwable).init.ptr)
         throwable.info = _d_traceContext();
 
-    auto exc_struct = cast(_d_exception*)malloc(_d_exception.sizeof);
+    auto exc_struct = ExceptionStructPool.malloc();
     if (!exc_struct)
         fatalerror("Could not allocate D exception record; out of memory?");
     version (ARM)
@@ -430,8 +452,17 @@ void _d_throw_exception(Object e)
 
     debug(EH_personality)
     {
-        printf("= Throwing new exception of type %s: %p (struct at %p, classinfo at %p)\n",
+        printf("= Throwing new exception of type %s: %p (struct at %p, classinfo at %p",
             e.classinfo.name.ptr, e, exc_struct, e.classinfo);
+
+        debug (EH_verifyExceptionStructLifetime)
+        {
+            import core.atomic : atomicOp;
+            auto count = exceptionStructsInFlight.atomicOp!"+="(1);
+            printf(", %zu structs in flight", count);
+        }
+
+        printf(")\n");
     }
 
     searchPhaseClassInfo = e.classinfo;
@@ -457,10 +488,33 @@ void _d_eh_resume_unwind(_d_exception* exception_struct)
     _Unwind_Resume(&exception_struct.unwind_info);
 }
 
+Object _d_eh_destroy_exception_struct(void* ptr)
+{
+    if (ptr == null)
+        return null;
+
+    auto exception_struct = cast(_d_exception*)ptr;
+    auto obj = exception_struct.exception_object;
+    ExceptionStructPool.free(exception_struct);
+
+    debug (EH_personality)
+    {
+        printf("  - Destroyed exception struct at %p", exception_struct);
+        debug (EH_verifyExceptionStructLifetime)
+        {
+            import core.atomic : atomicOp;
+            auto count = exceptionStructsInFlight.atomicOp!"-="(1);
+            printf(", %zu structs in flight", count);
+        }
+        printf("\n");
+    }
+
+    return obj;
+}
+
 Object _d_eh_enter_catch(_d_exception* exception_struct)
 {
-    auto obj = exception_struct.exception_object;
-    free(exception_struct);
+    auto obj = _d_eh_destroy_exception_struct(exception_struct);
     popCleanupBlockRecord();
     return obj;
 }

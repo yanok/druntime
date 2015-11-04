@@ -12,6 +12,8 @@ import core.stdc.stdio;
 import core.stdc.stdlib;
 import core.stdc.stdarg;
 
+import ldc.eh.fixedpool;
+
 // D runtime function
 extern(C) int _d_isbaseof(ClassInfo oc, ClassInfo c);
 
@@ -287,8 +289,6 @@ void _d_getLanguageSpecificTables(ubyte* data, ref ubyte* callsite, ref ubyte* a
     debug(EH_personality) printf("  - callsite: %p, action: %p, classinfo_table: %p, ciEncoding: %d\n", callsite, action, classinfo_table, ciEncoding);
 }
 
-
-
 // -----------------------------
 //    Stack of finally blocks
 // -----------------------------
@@ -300,6 +300,11 @@ struct ActiveCleanupBlock {
     /// The exception that caused this cleanup block to be entered.
     Object dObject;
 
+    /// The exception struct associated with the above exception. Currently only
+    /// used by libunwind; define destroyExceptionStruct in your implementation's
+    /// NativeContext code to handle this correctly.
+    void* exceptionStruct;
+
     /// The CFA (stack address, roughly) when this cleanup block was entered, as
     /// reported by libunwind.
     ///
@@ -309,6 +314,8 @@ struct ActiveCleanupBlock {
     /// chaining.
     ptrdiff_t cfaAddr;
 }
+
+static FixedPool!(ActiveCleanupBlock, 8) ActiveCleanupBlockPool;
 
 /// Stack of active finally blocks (i.e. cleanup landing pads) that were entered
 /// because of exception unwinding. Used for exception chaining.
@@ -351,17 +358,12 @@ ActiveCleanupBlock* searchPhaseCurrentCleanupBlock = null;
 /// rules).
 ClassInfo searchPhaseClassInfo = null;
 
-void pushCleanupBlockRecord(ptrdiff_t cfaAddr, Object dObject)
+ActiveCleanupBlock* pushCleanupBlockRecord(ptrdiff_t cfaAddr, Object dObject)
 {
-    auto acb = cast(ActiveCleanupBlock*)malloc(ActiveCleanupBlock.sizeof);
+    auto acb = ActiveCleanupBlockPool.malloc();
     if (!acb)
-    {
-        // TODO: Allocate some statically to avoid problem with unwinding out of
-        // memory errors. A fairly small amount of memory should suffice for
-        // most applications unless people want to unwind through very deeply
-        // recursive code with many finally blocks.
         fatalerror("Could not allocate memory for exception chaining.");
-    }
+
     acb.cfaAddr = cfaAddr;
     acb.dObject = dObject;
     acb.outerBlock = innermostCleanupBlock;
@@ -373,6 +375,7 @@ void pushCleanupBlockRecord(ptrdiff_t cfaAddr, Object dObject)
     // keep a reference to the object extracted from the landing pad around as
     // there is no _d_eh_resume_unwind() call.
     GC.addRoot(cast(void*)dObject);
+    return acb;
 }
 
 void popCleanupBlockRecord()
@@ -386,7 +389,7 @@ void popCleanupBlockRecord()
     auto acb = innermostCleanupBlock;
     GC.removeRoot(cast(void*)acb.dObject);
     innermostCleanupBlock = acb.outerBlock;
-    free(acb);
+    ActiveCleanupBlockPool.free(acb);
 }
 
 
@@ -586,8 +589,14 @@ extern(C) auto eh_personality_common(NativeContext)(ref NativeContext nativeCont
         auto outer = acb.outerBlock;
         if (!isSearchPhase)
         {
+            // Destroy the exception struct associated with the previous level.
+            // This is necessary as the libunwind implementation allocates new
+            // exception structs for each throw; if we're chaining an exception,
+            // we need to destroy the previous exception struct.
+            nativeContext.destroyExceptionStruct(acb.exceptionStruct);
+
             GC.removeRoot(cast(void*)acb.dObject);
-            free(acb);
+            ActiveCleanupBlockPool.free(acb);
         }
         acb = outer;
     }
