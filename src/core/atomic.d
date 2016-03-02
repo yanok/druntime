@@ -176,6 +176,9 @@ else version( LDC )
     HeadUnshared!(T) atomicOp(string op, T, V1)( ref shared T val, V1 mod )
         if( __traits( compiles, mixin( "val" ~ op ~ "mod" ) ) )
     {
+        enum suitedForAtomicRmw = (__traits(isIntegral, T) && __traits(isIntegral, V1) &&
+                                   T.sizeof <= AtomicRmwSizeLimit && V1.sizeof <= AtomicRmwSizeLimit);
+
         // binary operators
         //
         // +    -   *   /   %   ^^  &
@@ -196,9 +199,34 @@ else version( LDC )
         //
         // +=   -=  *=  /=  %=  ^^= &=
         // |=   ^=  <<= >>= >>>=    ~=
-        static if( op == "+=" || op == "-="  || op == "*="  || op == "/=" ||
-                   op == "%=" || op == "^^=" || op == "&="  || op == "|=" ||
-                   op == "^=" || op == "<<=" || op == ">>=" || op == ">>>=" ) // skip "~="
+        static if( op == "+=" && suitedForAtomicRmw )
+        {
+            T m = cast(T) mod;
+            return cast(T)(llvm_atomic_rmw_add(&val, m) + m);
+        }
+        else static if( op == "-=" && suitedForAtomicRmw )
+        {
+            T m = cast(T) mod;
+            return cast(T)(llvm_atomic_rmw_sub(&val, m) - m);
+        }
+        else static if( op == "&=" && suitedForAtomicRmw )
+        {
+            T m = cast(T) mod;
+            return cast(T)(llvm_atomic_rmw_and(&val, m) & m);
+        }
+        else static if( op == "|=" && suitedForAtomicRmw )
+        {
+            T m = cast(T) mod;
+            return cast(T)(llvm_atomic_rmw_or(&val, m) | m);
+        }
+        else static if( op == "^=" && suitedForAtomicRmw )
+        {
+            T m = cast(T) mod;
+            return cast(T)(llvm_atomic_rmw_xor(&val, m) ^ m);
+        }
+        else static if( op == "+=" || op == "-="  || op == "*="  || op == "/=" ||
+                        op == "%=" || op == "^^=" || op == "&="  || op == "|=" ||
+                        op == "^=" || op == "<<=" || op == ">>=" || op == ">>>=" ) // skip "~="
         {
             HeadUnshared!(T) get, set;
 
@@ -241,14 +269,14 @@ else version( LDC )
             static if(T.sizeof == int.sizeof)
             {
                 static assert(is(T : float));
-                int rawRes = llvm_atomic_cmp_swap!int(
+                int rawRes = llvm_atomic_cmp_xchg!int(
                     cast(shared int*)here, *cast(int*)&ifThis, *cast(int*)&writeThis);
                 res = *(cast(T*)&rawRes);
             }
             else static if(T.sizeof == long.sizeof)
             {
                 static assert(is(T : double));
-                long rawRes = cast(T)llvm_atomic_cmp_swap!long(
+                long rawRes = cast(T)llvm_atomic_cmp_xchg!long(
                     cast(shared long*)here, *cast(long*)&ifThis, *cast(long*)&writeThis);
                 res = *(cast(T*)&rawRes);
             }
@@ -259,7 +287,7 @@ else version( LDC )
         }
         else static if (is(T P == U*, U) || is(T == class) || is(T == interface))
         {
-            res = cast(T)cast(void*)llvm_atomic_cmp_swap!(size_t)(
+            res = cast(T)cast(void*)llvm_atomic_cmp_xchg!(size_t)(
                 cast(shared size_t*)cast(void**)here,
                 cast(size_t)cast(void*)ifThis,
                 cast(size_t)cast(void*)writeThis
@@ -267,11 +295,11 @@ else version( LDC )
         }
         else static if (is(T : bool))
         {
-            res = llvm_atomic_cmp_swap!(ubyte)(cast(shared ubyte*)here, ifThis ? 1 : 0, writeThis ? 1 : 0) ? 1 : 0;
+            res = llvm_atomic_cmp_xchg!(ubyte)(cast(shared ubyte*)here, ifThis ? 1 : 0, writeThis ? 1 : 0) ? 1 : 0;
         }
         else
         {
-            res = llvm_atomic_cmp_swap!(T)(here, cast(T)ifThis, cast(T)writeThis);
+            res = llvm_atomic_cmp_xchg!(T)(here, cast(T)ifThis, cast(T)writeThis);
         }
         return res is cast(T)ifThis;
     }
