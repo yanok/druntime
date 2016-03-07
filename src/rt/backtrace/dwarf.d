@@ -38,7 +38,7 @@ int traceHandlerOpApplyImpl(const(void*)[] callstack, scope int delegate(ref siz
     else version(FreeBSD) import core.sys.freebsd.execinfo : backtrace_symbols;
     import core.sys.posix.stdlib : free;
 
-version (LDC)
+version (WEKA)
 {
     const char** frameListFull = backtrace_symbols(callstack.ptr, cast(int) callstack.length);
     scope(exit) free(cast(void*) frameListFull);

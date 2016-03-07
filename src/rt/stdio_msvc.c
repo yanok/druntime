@@ -6,7 +6,7 @@
 * License: Distributed under the
 *      $(LINK2 http://www.boost.org/LICENSE_1_0.txt, Boost Software License 1.0).
 *    (See accompanying file LICENSE)
-* Source:    $(DRUNTIMESRC rt/_msvc.c)
+* Source:    $(DRUNTIMESRC rt/_stdio_msvc.d)
 * Authors:   Rainer Schuetze
 */
 
@@ -93,8 +93,8 @@ DECLARE_ALTERNATE_NAME (fileno, _msvc_fileno);
 int _filbuf(FILE* fp);
 int _flsbuf(int c, FILE* fp);
 
-DECLARE_ALTERNATE_NAME(_filbuf, _nullfunc);
-DECLARE_ALTERNATE_NAME(_flsbuf, _nullfunc);
+DECLARE_ALTERNATE_NAME (_filbuf, _nullfunc);
+DECLARE_ALTERNATE_NAME (_flsbuf, _nullfunc);
 
 int _msvc_fputc_nolock(int c, FILE* fp)
 {
@@ -207,3 +207,4 @@ DECLARE_ALTERNATE_NAME (modff,  _msvc_modff);
         #endif
     #endif
 #endif
+

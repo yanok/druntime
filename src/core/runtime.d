@@ -578,7 +578,7 @@ Throwable.TraceInfo defaultTraceHandler( void* ptr = null )
 
             override int opApply( scope int delegate(ref size_t, ref const(char[])) dg ) const
             {
-                version (LDC)
+                version (WEKA)
                 {
                     // NOTE: On LDC, the number of frames heavily depends on the
                     // runtime build settings, etc., so skipping a fixed number of
@@ -646,7 +646,6 @@ Throwable.TraceInfo defaultTraceHandler( void* ptr = null )
                     }
                     return ret;
                 }
-
             }
 
             override string toString() const
