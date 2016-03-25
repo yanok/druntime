@@ -20,6 +20,8 @@ import core.memory;
 debug(PRINTF) import core.stdc.stdio;
 static import rt.tlsgc;
 version(LDC) import ldc.intrinsics;
+version(LDC) import ldc.attributes : weak;
+else enum weak; // Dummy weak attribute
 
 alias BlkInfo = GC.BlkInfo;
 alias BlkAttr = GC.BlkAttr;
@@ -61,7 +63,9 @@ extern (C) void lifetime_init()
 /**
  *
  */
-extern (C) void* _d_allocmemory(size_t sz)
+extern (C)
+@weak // LDC
+void* _d_allocmemory(size_t sz)
 {
     return GC.malloc(sz);
 }
@@ -73,7 +77,7 @@ version (LDC)
 /**
  * for allocating a single POD value
  */
-extern (C) void* _d_allocmemoryT(TypeInfo ti)
+extern (C) @weak void* _d_allocmemoryT(TypeInfo ti)
 {
     return GC.malloc(ti.tsize(), !(ti.flags() & 1) ? BlkAttr.NO_SCAN : 0);
 }
@@ -84,7 +88,9 @@ extern (C) void* _d_allocmemoryT(TypeInfo ti)
 /**
  *
  */
-extern (C) Object _d_newclass(const ClassInfo ci)
+extern (C)
+@weak // LDC
+Object _d_newclass(const ClassInfo ci)
 {
     void* p;
 
@@ -1123,7 +1129,9 @@ extern (C) void[] _d_newarraymiTX(const TypeInfo ti, size_t[] dims)
  * Allocate an uninitialized non-array item.
  * This is an optimization to avoid things needed for arrays like the __arrayPad(size).
  */
-extern (C) void* _d_newitemU(in TypeInfo _ti)
+extern (C)
+@weak // LDC
+void* _d_newitemU(in TypeInfo _ti)
 {
     auto ti = unqualify(_ti);
     auto flags = !(ti.flags & 1) ? BlkAttr.NO_SCAN : 0;
@@ -1142,7 +1150,9 @@ extern (C) void* _d_newitemU(in TypeInfo _ti)
 }
 
 /// Same as above, zero initializes the item.
-extern (C) void* _d_newitemT(in TypeInfo _ti)
+extern (C)
+@weak // LDC
+void* _d_newitemT(in TypeInfo _ti)
 {
     auto p = _d_newitemU(_ti);
     memset(p, 0, _ti.tsize);
@@ -1150,7 +1160,9 @@ extern (C) void* _d_newitemT(in TypeInfo _ti)
 }
 
 /// Same as above, for item with non-zero initializer.
-extern (C) void* _d_newitemiT(in TypeInfo _ti)
+extern (C)
+@weak // LDC
+void* _d_newitemiT(in TypeInfo _ti)
 {
     auto p = _d_newitemU(_ti);
     auto init = _ti.init();
