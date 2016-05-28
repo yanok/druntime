@@ -200,6 +200,11 @@ version (Shared)
         assert(_loadedDSOs.empty);
         _loadedDSOs.swap(*cast(Array!(ThreadDSO)*)p);
         .free(p);
+        foreach (ref dso; _loadedDSOs)
+        {
+            // the copied _tlsRange corresponds to parent thread
+            dso.updateTLSRange();
+        }
     }
 
     // Called after all TLS dtors ran, decrements all remaining dlopen refs.
@@ -267,6 +272,11 @@ version (Shared)
         else static assert(0, "unimplemented");
         void[] _tlsRange;
         alias _pdso this;
+        // update the _tlsRange for the executing thread
+        void updateTLSRange()
+        {
+            _tlsRange = getTLSRange(_pdso._tlsMod, _pdso._tlsSize);
+        }
     }
     Array!(ThreadDSO) _loadedDSOs;
 
@@ -726,6 +736,11 @@ void scanSegments(in ref dl_phdr_info info, DSO* pdso)
             assert(!pdso._tlsSize); // is unique per DSO
             pdso._tlsMod = info.dlpi_tls_modid;
             pdso._tlsSize = phdr.p_memsz;
+
+            // align to multiple of size_t to avoid misaligned scanning
+            // (size is subtracted from TCB address to get base of TLS)
+            immutable mask = size_t.sizeof - 1;
+            pdso._tlsSize = (pdso._tlsSize + mask) & ~mask;
             break;
 
         default:
@@ -927,6 +942,17 @@ struct tls_index
     size_t ti_offset;
 }
 
+version(LDC)
+{
+    version(PPC64)
+    {
+        extern(C) void* __tls_get_addr_opt(tls_index* ti);
+        alias __tls_get_addr = __tls_get_addr_opt;
+    }
+    else
+        extern(C) void* __tls_get_addr(tls_index* ti);
+}
+else
 extern(C) void* __tls_get_addr(tls_index* ti);
 
 /* The dynamic thread vector (DTV) pointers may point 0x8000 past the start of
