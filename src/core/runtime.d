@@ -499,6 +499,7 @@ extern (C) bool runModuleUnitTests()
 /**
  *
  */
+version(WEKA) pragma(inline, false) // Needed because of mangling hack in weka/lib/exception.d to call the DefaultTraceInfo ctor.
 Throwable.TraceInfo defaultTraceHandler( void* ptr = null )
 {
     // backtrace
