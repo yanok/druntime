@@ -773,6 +773,27 @@ Throwable.TraceInfo defaultTraceHandler( void* ptr = null )
             }
         }
 
+        version(WEKA)
+        {
+            // Weka's code casts the result of defaultTraceHandler to a
+            // redefined struct such that external code can access the data
+            // inside this Voldemort type. Do static asserts here to check that
+            // Weka's struct has the same size as the Voldemort type, etc.
+
+            // weka/lib/exception.d's struct:
+            struct DefaultTraceInfoABI {
+                void*  _vtable;
+                void*  _monitor;
+                void* _interface;
+                int       numframes;
+                bool      alreadyHandled;  // use the padding for this extra member
+                void*[0]  callstack;
+            }
+            //static assert (DefaultTraceInfo.sizeof == DefaultTraceInfoABI.sizeof);
+            static assert (DefaultTraceInfo.numframes.offsetof == DefaultTraceInfoABI.numframes.offsetof);
+            static assert (DefaultTraceInfo.callstack.offsetof == DefaultTraceInfoABI.callstack.offsetof);
+        }
+
         return new DefaultTraceInfo;
     }
     else static if( __traits( compiles, new StackTrace(0, null) ) )
