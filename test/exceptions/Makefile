@@ -1,9 +1,6 @@
 include ../common.mak
 
-#SRC:=src
-#ROOT:=./obj/$(OS)/$(MODEL)
-TESTS:=stderr_msg unittest_assert
-#TESTS:=stderr_msg unittest_assert invalid_memory_operation
+TESTS:=stderr_msg unittest_assert invalid_memory_operation unknown_gc static_dtor
 ifeq ($(OS)-$(BUILD),linux-debug)
 	TESTS:=$(TESTS) line_trace
 endif
@@ -31,9 +28,12 @@ $(ROOT)/line_trace.done: $(ROOT)/line_trace
 $(ROOT)/stderr_msg.done: STDERR_EXP="stderr_msg msg"
 $(ROOT)/unittest_assert.done: STDERR_EXP="unittest_assert msg"
 $(ROOT)/invalid_memory_operation.done: STDERR_EXP="InvalidMemoryOperationError"
+$(ROOT)/unknown_gc.done: STDERR_EXP="'unknowngc'"
+$(ROOT)/static_dtor.done: STDERR_EXP="dtor_called_more_than_once"
+$(ROOT)/static_dtor.done: NEGATE=!
 $(ROOT)/%.done: $(ROOT)/%
 	@echo Testing $*
-	$(QUIET)$(TIMELIMIT)$(ROOT)/$* $(RUN_ARGS) 2>&1 1>/dev/null | grep -qF $(STDERR_EXP)
+	$(NEGATE) $(QUIET)$(TIMELIMIT)$(ROOT)/$* $(RUN_ARGS) 2>&1 1>/dev/null | grep -qF $(STDERR_EXP)
 	@touch $@
 
 $(ROOT)/line_trace.done: $(ROOT)/line_trace

@@ -16,6 +16,14 @@ module core.runtime;
 
 version (Windows) import core.stdc.wchar_ : wchar_t;
 
+version (OSX)
+    version = Darwin;
+else version (iOS)
+    version = Darwin;
+else version (TVOS)
+    version = Darwin;
+else version (WatchOS)
+    version = Darwin;
 
 /// C interface for Runtime.loadLibrary
 extern (C) void* rt_loadLibrary(const char* name);
@@ -313,6 +321,47 @@ struct Runtime
      *
      * Params:
      *  h = The new unit tester.  Set to null to use the default unit tester.
+     *
+     * Example:
+     * ---------
+     * version (unittest) shared static this()
+     * {
+     *     import core.runtime;
+     *
+     *     Runtime.moduleUnitTester = &customModuleUnitTester;
+     * }
+     *
+     * bool customModuleUnitTester()
+     * {
+     *     import std.stdio;
+     *
+     *     writeln("Using customModuleUnitTester");
+     *
+     *     // Do the same thing as the default moduleUnitTester:
+     *     size_t failed = 0;
+     *     foreach (m; ModuleInfo)
+     *     {
+     *         if (m)
+     *         {
+     *             auto fp = m.unitTest;
+     *
+     *             if (fp)
+     *             {
+     *                 try
+     *                 {
+     *                     fp();
+     *                 }
+     *                 catch (Throwable e)
+     *                 {
+     *                     writeln(e);
+     *                     failed++;
+     *                 }
+     *             }
+     *         }
+     *     }
+     *     return failed == 0;
+     * }
+     * ---------
      */
     static @property void moduleUnitTester( ModuleUnitTester h )
     {
@@ -422,8 +471,8 @@ extern (C) bool runModuleUnitTests()
     // backtrace
     version( CRuntime_Glibc )
         import core.sys.linux.execinfo;
-    else version( OSX )
-        import core.sys.osx.execinfo;
+    else version( Darwin )
+        import core.sys.darwin.execinfo;
     else version( FreeBSD )
         import core.sys.freebsd.execinfo;
     else version( Windows )
@@ -505,8 +554,8 @@ Throwable.TraceInfo defaultTraceHandler( void* ptr = null )
     // backtrace
     version( CRuntime_Glibc )
         import core.sys.linux.execinfo;
-    else version( OSX )
-        import core.sys.osx.execinfo;
+    else version( Darwin )
+        import core.sys.darwin.execinfo;
     else version( FreeBSD )
         import core.sys.freebsd.execinfo;
     else version( Windows )
@@ -584,7 +633,7 @@ Throwable.TraceInfo defaultTraceHandler( void* ptr = null )
 
             override int opApply( scope int delegate(ref size_t, ref const(char[])) dg ) const
             {
-                version (WEKA)
+                version (LDC)
                 {
                     // NOTE: On LDC, the number of frames heavily depends on the
                     // runtime build settings, etc., so skipping a fixed number of
@@ -671,7 +720,7 @@ Throwable.TraceInfo defaultTraceHandler( void* ptr = null )
             const(char)[] fixline( const(char)[] buf, return ref char[4096] fixbuf ) const
             {
                 size_t symBeg, symEnd;
-                version( OSX )
+                version( Darwin )
                 {
                     // format is:
                     //  1  module    0x00000000 D6module4funcAFZv + 0
@@ -798,7 +847,11 @@ Throwable.TraceInfo defaultTraceHandler( void* ptr = null )
     }
     else static if( __traits( compiles, new StackTrace(0, null) ) )
     {
-        version (Win64)
+        version (LDC)
+        {
+            static enum FIRSTFRAME = 0;
+        }
+        else version (Win64)
         {
             static enum FIRSTFRAME = 4;
         }

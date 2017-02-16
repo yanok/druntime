@@ -15,6 +15,14 @@ module core.thread;
 public import core.time; // for Duration
 import core.exception : onOutOfMemoryError;
 
+version (OSX)
+    version = Darwin;
+else version (iOS)
+    version = Darwin;
+else version (TVOS)
+    version = Darwin;
+else version (WatchOS)
+    version = Darwin;
 
 private
 {
@@ -277,10 +285,10 @@ else version( Posix )
         import core.sys.posix.signal;
         import core.sys.posix.time;
 
-        version( OSX )
+        version( Darwin )
         {
-            import core.sys.osx.mach.thread_act;
-            import core.sys.osx.pthread : pthread_mach_thread_np;
+            import core.sys.darwin.mach.thread_act;
+            import core.sys.darwin.pthread : pthread_mach_thread_np;
         }
 
         version( GNU )
@@ -325,7 +333,7 @@ else version( Posix )
             }
             Thread.add(&obj.m_main);
 
-            static extern (C) void thread_cleanupHandler( void* arg ) nothrow
+            static extern (C) void thread_cleanupHandler( void* arg ) nothrow @nogc
             {
                 Thread  obj = cast(Thread) arg;
                 assert( obj );
@@ -613,7 +621,7 @@ class Thread
             pthread_detach( m_addr );
             m_addr = m_addr.init;
         }
-        version( OSX )
+        version( Darwin )
         {
             m_tmach = m_tmach.init;
         }
@@ -720,7 +728,7 @@ class Thread
                         onThreadError( "Error creating thread" );
                 }
             }
-            version( OSX )
+            version( Darwin )
             {
                 m_tmach = pthread_mach_thread_np( m_addr );
                 if( m_tmach == m_tmach.init )
@@ -1022,7 +1030,7 @@ class Thread
             }
             else
             {
-                // NOTE: pthread_setschedprio is not implemented on OSX or FreeBSD, so use
+                // NOTE: pthread_setschedprio is not implemented on Darwin or FreeBSD, so use
                 //       the more complicated get/set sequence below.
                 int         policy;
                 sched_param param;
@@ -1455,7 +1463,7 @@ private:
     {
         HANDLE          m_hndl;
     }
-    else version( OSX )
+    else version( Darwin )
     {
         mach_port_t     m_tmach;
     }
@@ -1577,7 +1585,7 @@ private:
         static assert(false, "Architecture not supported." );
       }
     }
-    else version( OSX )
+    else version( Darwin )
     {
       version( X86 )
       {
@@ -1952,7 +1960,7 @@ extern (C) void thread_init()
 
     Thread.initLocks();
 
-    version( OSX )
+    version( Darwin )
     {
     }
     else version( Posix )
@@ -2078,7 +2086,7 @@ extern (C) Thread thread_attachThis()
     thisThread.m_tlsgcdata = rt_tlsgc_init();
     Thread.setThis( thisThread );
 
-    version( OSX )
+    version( Darwin )
     {
         thisThread.m_tmach = pthread_mach_thread_np( thisThread.m_addr );
         assert( thisThread.m_tmach != thisThread.m_tmach.init );
@@ -2619,7 +2627,7 @@ private bool suspend( Thread t ) nothrow
             static assert(false, "Architecture not supported." );
         }
     }
-    else version( OSX )
+    else version( Darwin )
     {
         if( t.m_addr != pthread_self() && thread_suspend( t.m_tmach ) != KERN_SUCCESS )
         {
@@ -2754,7 +2762,7 @@ extern (C) void thread_suspendAll() nothrow
             t = tn;
         }
 
-        version (OSX)
+        version (Darwin)
         {}
         else version (Posix)
         {
@@ -2822,7 +2830,7 @@ private void resume( Thread t ) nothrow
             t.m_curr.tstack = t.m_curr.bstack;
         t.m_reg[0 .. $] = 0;
     }
-    else version( OSX )
+    else version( Darwin )
     {
         if( t.m_addr != pthread_self() && thread_resume( t.m_tmach ) != KERN_SUCCESS )
         {
@@ -3333,9 +3341,9 @@ private void* getStackBottom() nothrow
             static assert(false, "Architecture not supported.");
         }
     }
-    else version (OSX)
+    else version (Darwin)
     {
-        import core.sys.osx.pthread;
+        import core.sys.darwin.pthread;
         return pthread_get_stackaddr_np(pthread_self());
     }
     else version (CRuntime_Glibc)
@@ -3591,7 +3599,7 @@ private
         else version( Posix )
             version = AsmX86_Posix;
 
-        version( OSX )
+        version( Darwin )
             version = AlignFiberStackTo16Byte;
     }
     else version( D_InlineAsm_X86_64 )
@@ -4701,7 +4709,7 @@ private:
             version (Posix) import core.sys.posix.sys.mman; // mmap
             version (FreeBSD) import core.sys.freebsd.sys.mman : MAP_ANON;
             version (CRuntime_Glibc) import core.sys.linux.sys.mman : MAP_ANON;
-            version (OSX) import core.sys.osx.sys.mman : MAP_ANON;
+            version (Darwin) import core.sys.darwin.sys.mman : MAP_ANON;
 
             static if( __traits( compiles, mmap ) )
             {
@@ -5295,8 +5303,8 @@ private:
             else if (tobj !is m_curThread)
             {
                 m_unhandled = new ThreadException
-                    ("Migrating Fibers between Threads on this platform may lead "
-                     "to incorrect thread local variable access.  To allow "
+                    ("Migrating Fibers between Threads on this platform may lead " ~
+                     "to incorrect thread local variable access.  To allow " ~
                      "migration anyway, call Fiber.allowMigration()");
                 return;
             }
@@ -5507,8 +5515,8 @@ unittest
         // If thread local addr not cached (correct behavior), then tls should
         // still be 1.
         assert(tls != 2,
-               "Not safe to migrate Fibers between Threads on your system. "
-               "Consider setting version CheckFiberMigration for this system "
+               "Not safe to migrate Fibers between Threads on your system. " ~
+               "Consider setting version CheckFiberMigration for this system " ~
                "in thread.d");
         // verify un-cached correct case
         assert(tls == 1);
@@ -5518,8 +5526,8 @@ unittest
         if (tls == 2)
         {
             import core.stdc.stdio : puts;
-            puts("Not safe to migrate Fibers between Threads on your system. "
-                 "Consider setting version CheckFiberMigration for this system "
+            puts("Not safe to migrate Fibers between Threads on your system. " ~
+                 "Consider setting version CheckFiberMigration for this system " ~
                  "in thread.d");
         }
     }
