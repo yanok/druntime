@@ -556,11 +556,21 @@ extern (C) void onOutOfMemoryErrorNoGC() @trusted nothrow @nogc
  * Throws:
  *  $(LREF InvalidMemoryOperationError).
  */
-extern (C) void onInvalidMemoryOperationError(void* pretend_sideffect = null) @trusted pure nothrow @nogc /* dmd @@@BUG11461@@@ */
+extern (C) void onInvalidMemoryOperationError(void* pretend_sideffect = null) @trusted /*pure*/ nothrow @nogc /* dmd @@@BUG11461@@@ */
+{
+version(WEKA)
+{
+    // No point unwinding. Abort immediately, so that the backtrace shows the offender.
+    // TODO: How about a runtime flag for choosing between throw and abort? (also for the other throwing functions here?)
+    static import core.stdc.stdlib;
+    core.stdc.stdlib.abort();
+}
+else
 {
     // The same restriction applies as for onOutOfMemoryError. The GC is in an
     // undefined state, thus no allocation must occur while generating this object.
     throw staticError!InvalidMemoryOperationError();
+}
 }
 
 
