@@ -475,6 +475,8 @@ extern (C) bool runModuleUnitTests()
         import core.sys.darwin.execinfo;
     else version( FreeBSD )
         import core.sys.freebsd.execinfo;
+    else version( NetBSD )
+        import core.sys.netbsd.execinfo;
     else version( Windows )
         import core.sys.windows.stacktrace;
     else version( Solaris )
@@ -544,6 +546,56 @@ extern (C) bool runModuleUnitTests()
 // Default Implementations
 ///////////////////////////////////////////////////////////////////////////////
 
+version( Darwin )
+{
+    nothrow:
+
+    extern (C)
+    {
+        enum _URC_NO_REASON = 0;
+        enum _URC_END_OF_STACK = 5;
+
+        alias _Unwind_Context_Ptr = void*;
+        alias _Unwind_Trace_Fn = int function(_Unwind_Context_Ptr, void*);
+        int _Unwind_Backtrace(_Unwind_Trace_Fn, void*);
+        ptrdiff_t _Unwind_GetIP(_Unwind_Context_Ptr context);
+    }
+
+    // Use our own backtrce() based on _Unwind_Backtrace(), as the former (from
+    // execinfo) doesn't seem to handle missing frame pointers too well.
+    private int backtrace(void** buffer, int maxSize)
+    {
+        if (maxSize < 0) return 0;
+
+        struct State
+        {
+            void** buffer;
+            int maxSize;
+            int entriesWritten = 0;
+        }
+
+        static extern(C) int handler(_Unwind_Context_Ptr context, void* statePtr)
+        {
+            auto state = cast(State*)statePtr;
+            if (state.entriesWritten >= state.maxSize) return _URC_END_OF_STACK;
+
+            auto instructionPtr = _Unwind_GetIP(context);
+            if (!instructionPtr) return _URC_END_OF_STACK;
+
+            state.buffer[state.entriesWritten] = cast(void*)instructionPtr;
+            ++state.entriesWritten;
+
+            return _URC_NO_REASON;
+        }
+
+        State state;
+        state.buffer = buffer;
+        state.maxSize = maxSize;
+        _Unwind_Backtrace(&handler, &state);
+
+        return state.entriesWritten;
+    }
+}
 
 /**
  *
@@ -555,9 +607,11 @@ Throwable.TraceInfo defaultTraceHandler( void* ptr = null )
     version( CRuntime_Glibc )
         import core.sys.linux.execinfo;
     else version( Darwin )
-        import core.sys.darwin.execinfo;
+        import core.sys.darwin.execinfo : backtrace_symbols;
     else version( FreeBSD )
         import core.sys.freebsd.execinfo;
+    else version( NetBSD )
+        import core.sys.netbsd.execinfo;
     else version( Windows )
         import core.sys.windows.stacktrace;
     else version( Solaris )
@@ -759,6 +813,18 @@ Throwable.TraceInfo defaultTraceHandler( void* ptr = null )
                     }
                 }
                 else version( FreeBSD )
+                {
+                    // format is: 0x00000000 <_D6module4funcAFZv+0x78> at module
+                    auto bptr = cast(char*) memchr( buf.ptr, '<', buf.length );
+                    auto eptr = cast(char*) memchr( buf.ptr, '+', buf.length );
+
+                    if( bptr++ && eptr )
+                    {
+                        symBeg = bptr - buf.ptr;
+                        symEnd = eptr - buf.ptr;
+                    }
+                }
+                else version( NetBSD )
                 {
                     // format is: 0x00000000 <_D6module4funcAFZv+0x78> at module
                     auto bptr = cast(char*) memchr( buf.ptr, '<', buf.length );

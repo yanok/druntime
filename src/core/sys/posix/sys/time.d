@@ -27,6 +27,8 @@ else version (TVOS)
 else version (WatchOS)
     version = Darwin;
 
+version (linux) public import core.sys.linux.sys.time;
+
 version (Posix):
 extern (C) nothrow @nogc:
 
@@ -129,6 +131,25 @@ else version( FreeBSD )
 
     int getitimer(int, itimerval*);
     int gettimeofday(timeval*, timezone_t*); // timezone_t* is normally void*
+    int setitimer(int, in itimerval*, itimerval*);
+    int utimes(in char*, ref const(timeval)[2]);
+}
+else version(NetBSD)
+{
+    struct timeval
+    {
+        time_t      tv_sec;
+        suseconds_t tv_usec;
+    }
+
+    struct itimerval
+    {
+        timeval it_interval;
+        timeval it_value;
+    }
+
+    int getitimer(int, itimerval*);
+    int gettimeofday(timeval*, void*); // timezone_t* is normally void*
     int setitimer(int, in itimerval*, itimerval*);
     int utimes(in char*, ref const(timeval)[2]);
 }

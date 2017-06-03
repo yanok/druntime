@@ -127,6 +127,8 @@ else version( DigitalMars )
             alias real c_long_double;
         else version( OpenBSD )
             alias real c_long_double;
+        else version( NetBSD )
+            alias real c_long_double;
         else version( Solaris )
             alias real c_long_double;
         else version( Darwin )
@@ -152,6 +154,10 @@ else version( LDC )
     else version( PPC )
         alias real c_long_double;
     else version( PPC64 )
+        alias real c_long_double;
+    else version( RISCV32 )
+        alias real c_long_double;
+    else version( RISCV64 )
         alias real c_long_double;
     else version( SPARC )
         alias real c_long_double;

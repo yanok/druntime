@@ -75,6 +75,7 @@ version(Windows)      enum RAND_MAX = 0x7fff;
 else version(CRuntime_Glibc)  enum RAND_MAX = 0x7fffffff;
 else version(Darwin)  enum RAND_MAX = 0x7fffffff;
 else version(FreeBSD) enum RAND_MAX = 0x7fffffff;
+else version(NetBSD)  enum RAND_MAX = 0x7fffffff;
 else version(OpenBSD) enum RAND_MAX = 0x7fffffff;
 else version(Solaris) enum RAND_MAX = 0x7fff;
 else version(CRuntime_Bionic) enum RAND_MAX = 0x7fffffff;
@@ -212,11 +213,11 @@ size_t  wcstombs(char* s, in wchar_t* pwcs, size_t n);
 version( DigitalMars )
 {
     // See malloc comment about @trusted.
-    void* alloca(size_t size); // non-standard
+    void* alloca(size_t size) pure; // non-standard
 }
 else version( GNU )
 {
-    void* alloca(size_t size); // compiler intrinsic
+    void* alloca(size_t size) pure; // compiler intrinsic
 }
 
 version( CRuntime_Microsoft )
