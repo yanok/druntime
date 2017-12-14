@@ -24,23 +24,23 @@ private
 
 version(D_LP64)
 {
-    alias ulong size_t;
-    alias long  ptrdiff_t;
+    alias size_t = ulong;
+    alias ptrdiff_t = long;
 }
 else
 {
-    alias uint  size_t;
-    alias int   ptrdiff_t;
+    alias size_t = uint;
+    alias ptrdiff_t = int;
 }
 
-alias ptrdiff_t sizediff_t; //For backwards compatibility only.
+alias sizediff_t = ptrdiff_t; //For backwards compatibility only.
 
-alias size_t hash_t; //For backwards compatibility only.
-alias bool equals_t; //For backwards compatibility only.
+alias hash_t = size_t; //For backwards compatibility only.
+alias equals_t = bool; //For backwards compatibility only.
 
-alias immutable(char)[]  string;
-alias immutable(wchar)[] wstring;
-alias immutable(dchar)[] dstring;
+alias string  = immutable(char)[];
+alias wstring = immutable(wchar)[];
+alias dstring = immutable(dchar)[];
 
 version (LDC)
 {
@@ -303,7 +303,7 @@ class TypeInfo
     /// Swaps two instances of the type.
     void swap(void* p1, void* p2) const
     {
-        size_t n = tsize;
+        immutable size_t n = tsize;
         for (size_t i = 0; i < n; i++)
         {
             byte t = (cast(byte *)p1)[i];
@@ -372,7 +372,7 @@ version(LDC) unittest
     auto t = new TypeInfo; // test that TypeInfo is not an abstract class. Needed for instantiating typeof(null).
 }
 
-class TypeInfo_Typedef : TypeInfo
+class TypeInfo_Enum : TypeInfo
 {
     override string toString() const { return name; }
 
@@ -380,7 +380,7 @@ class TypeInfo_Typedef : TypeInfo
     {
         if (this is o)
             return true;
-        auto c = cast(const TypeInfo_Typedef)o;
+        auto c = cast(const TypeInfo_Enum)o;
         return c && this.name == c.name &&
                     this.base == c.base;
     }
@@ -419,10 +419,6 @@ unittest // issue 12233
     assert(TypeInfo.init is null);
 }
 
-class TypeInfo_Enum : TypeInfo_Typedef
-{
-
-}
 
 // Please make sure to keep this in sync with TypeInfo_P (src/rt/typeinfo/ti_ptr.d)
 class TypeInfo_Pointer : TypeInfo
@@ -524,7 +520,7 @@ class TypeInfo_Array : TypeInfo
             len = a2.length;
         for (size_t u = 0; u < len; u++)
         {
-            int result = value.compare(a1.ptr + u * sz, a2.ptr + u * sz);
+            immutable int result = value.compare(a1.ptr + u * sz, a2.ptr + u * sz);
             if (result)
                 return result;
         }
@@ -614,7 +610,7 @@ class TypeInfo_StaticArray : TypeInfo
 
         for (size_t u = 0; u < len; u++)
         {
-            int result = value.compare(p1 + u * sz, p2 + u * sz);
+            immutable int result = value.compare(p1 + u * sz, p2 + u * sz);
             if (result)
                 return result;
         }
@@ -662,7 +658,7 @@ class TypeInfo_StaticArray : TypeInfo
 
     override void destroy(void* p) const
     {
-        auto sz = value.tsize;
+        immutable sz = value.tsize;
         p += sz * len;
         foreach (i; 0 .. len)
         {
@@ -673,7 +669,7 @@ class TypeInfo_StaticArray : TypeInfo
 
     override void postblit(void* p) const
     {
-        auto sz = value.tsize;
+        immutable sz = value.tsize;
         foreach (i; 0 .. len)
         {
             value.postblit(p);
@@ -885,7 +881,7 @@ class TypeInfo_Delegate : TypeInfo
 
     override @property size_t tsize() nothrow pure const
     {
-        alias int delegate() dg;
+        alias dg = int delegate();
         return dg.sizeof;
     }
 
@@ -901,7 +897,7 @@ class TypeInfo_Delegate : TypeInfo
 
     override @property size_t talign() nothrow pure const
     {
-        alias int delegate() dg;
+        alias dg = int delegate();
         return dg.alignof;
     }
 
@@ -1085,7 +1081,7 @@ class TypeInfo_Class : TypeInfo
     }
 }
 
-alias TypeInfo_Class ClassInfo;
+alias ClassInfo = TypeInfo_Class;
 
 unittest
 {
@@ -1703,11 +1699,15 @@ class Throwable : Object
     string      msg;    /// A message describing the error.
 
     /**
-     * The _file name and line number of the D source code corresponding with
+     * The _file name of the D source code corresponding with
      * where the error was thrown from.
      */
     string      file;
-    size_t      line;   /// ditto
+    /**
+     * The _line number of the D source code corresponding with
+     * where the error was thrown from.
+     */
+    size_t      line;
 
     /**
      * The stack trace of where the error happened. This is an opaque object
@@ -2785,7 +2785,7 @@ unittest
 
 /++
     Destroys the given object and puts it in an invalid state. It's used to
-    destroy an object so that any cleanup which its destructor or finalizer
+    _destroy an object so that any cleanup which its destructor or finalizer
     does is done and so that it no longer references any other objects. It does
     $(I not) initiate a GC cycle or free any GC memory.
   +/
@@ -2794,6 +2794,7 @@ void destroy(T)(T obj) if (is(T == class))
     rt_finalize(cast(void*)obj);
 }
 
+/// ditto
 void destroy(T)(T obj) if (is(T == interface))
 {
     destroy(cast(Object)obj);
@@ -2854,6 +2855,7 @@ version(unittest) unittest
    }
 }
 
+/// ditto
 void destroy(T)(ref T obj) if (is(T == struct))
 {
     _destructRecurse(obj);
@@ -2906,6 +2908,7 @@ version(unittest) nothrow @safe @nogc unittest
    }
 }
 
+/// ditto
 void destroy(T : U[n], U, size_t n)(ref T obj) if (!is(T == struct))
 {
     foreach_reverse (ref e; obj[])
@@ -2969,6 +2972,7 @@ unittest
     }
 }
 
+/// ditto
 void destroy(T)(ref T obj)
     if (!is(T == struct) && !is(T == interface) && !is(T == class) && !_isStaticArray!T)
 {
@@ -3014,15 +3018,15 @@ private
 }
 
 /**
- * (Property) Get the current capacity of a slice. The capacity is the size
+ * (Property) Gets the current _capacity of a slice. The _capacity is the size
  * that the slice can grow to before the underlying array must be
  * reallocated or extended.
  *
  * If an append must reallocate a slice with no possibility of extension, then
- * 0 is returned. This happens when the slice references a static array, or
+ * `0` is returned. This happens when the slice references a static array, or
  * if another slice references elements past the end of the current slice.
  *
- * Note: The capacity of a slice may be impacted by operations on other slices.
+ * Note: The _capacity of a slice may be impacted by operations on other slices.
  */
 @property size_t capacity(T)(T[] arr) pure nothrow @trusted
 {
@@ -3056,7 +3060,7 @@ private
  * that the slice can grow to before the underlying array must be
  * reallocated or extended.
  *
- * The return value is the new capacity of the array (which may be larger than
+ * Returns: The new capacity of the array (which may be larger than
  * the requested capacity).
  */
 size_t reserve(T)(ref T[] arr, size_t newcapacity) pure nothrow @trusted
@@ -3100,7 +3104,7 @@ unittest
  * array in the memory block.  If there are, those elements will be
  * overwritten by appending to this array.
  *
- * Calling this function, and then using references to data located after the
+ * Warning: Calling this function, and then using references to data located after the
  * given array results in undefined behavior.
  *
  * Returns:
@@ -3221,7 +3225,7 @@ bool _ArrayEq(T1, T2)(T1[] a1, T2[] a2)
     // This is function is used as a compiler intrinsic and explicitly written
     // in a lowered flavor to use as few CTFE instructions as possible.
     size_t idx = 0;
-    auto length = a1.length;
+    immutable length = a1.length;
 
     for(;idx < length;++idx)
     {
@@ -3233,7 +3237,7 @@ bool _ArrayEq(T1, T2)(T1[] a1, T2[] a2)
 
 /**
 Calculates the hash value of $(D arg) with $(D seed) initial value.
-Result may be non-equals with `typeid(T).getHash(&arg)`
+The result may not be equal to `typeid(T).getHash(&arg)`.
 The $(D seed) value may be used for hash chaining:
 ----
 struct Test
@@ -3509,14 +3513,13 @@ if (__traits(isScalar, T))
 // comparisons in the semantic analysis phase of CmpExp. The ordering
 // comparison is lowered to a call to this template.
 int __cmp(T1, T2)(T1[] s1, T2[] s2)
-if (!__traits(isScalar, T1))
+if (!__traits(isScalar, T1) && !__traits(isScalar, T2))
 {
     import core.internal.traits : Unqual;
     alias U1 = Unqual!T1;
     alias U2 = Unqual!T2;
-    static assert(is(U1 == U2), "Internal error.");
 
-    static if (is(U1 == void))
+    static if (is(U1 == void) && is(U2 == void))
         static @trusted ref inout(ubyte) at(inout(void)[] r, size_t i) { return (cast(inout(ubyte)*) r.ptr)[i]; }
     else
         static @trusted ref R at(R)(R[] r, size_t i) { return r.ptr[i]; }
@@ -3547,8 +3550,11 @@ if (!__traits(isScalar, T1))
         {
             // TODO: fix this legacy bad behavior, see
             // https://issues.dlang.org/show_bug.cgi?id=17244
+            static assert(is(U1 == U2), "Internal error.");
             import core.stdc.string : memcmp;
-            return (() @trusted => memcmp(&at(s1, u), &at(s2, u), U1.sizeof))();
+            auto c = (() @trusted => memcmp(&at(s1, u), &at(s2, u), U1.sizeof))();
+            if (c != 0)
+                return c;
         }
     }
     return s1.length < s2.length ? -1 : (s1.length > s2.length);
@@ -3607,9 +3613,15 @@ if (!__traits(isScalar, T1))
     {
         T[2] a = [T.max, T.max];
         T[2] b = [T.min_normal, T.min_normal];
+        T[2] c = [T.max, T.min_normal];
+        T[1] d = [T.max];
 
         assert(__cmp(a, b) > 0);
         assert(__cmp(b, a) < 0);
+        assert(__cmp(a, c) > 0);
+        assert(__cmp(a, d) > 0);
+        assert(__cmp(d, c) < 0);
+        assert(__cmp(c, c) == 0);
     }
 
     compareMinMax!real;
@@ -3641,6 +3653,24 @@ if (!__traits(isScalar, T1))
 
     assert(__cmp(a, b) > 0);
     assert(__cmp(b, a) < 0);
+}
+
+// arrays of arrays with mixed modifiers
+@safe unittest
+{
+    // https://issues.dlang.org/show_bug.cgi?id=17876
+    bool less1(immutable size_t[][] a, size_t[][] b) { return a < b; }
+    bool less2(const void[][] a, void[][] b) { return a < b; }
+    bool less3(inout size_t[][] a, size_t[][] b) { return a < b; }
+
+    immutable size_t[][] a = [[1, 2], [3, 4]];
+    size_t[][] b = [[1, 2], [3, 5]];
+    assert(less1(a, b));
+    assert(less3(a, b));
+
+    auto va = [cast(immutable void[])a[0], a[1]];
+    auto vb = [cast(void[])b[0], b[1]];
+    assert(less2(va, vb));
 }
 
 // objects
@@ -3683,6 +3713,14 @@ if (!__traits(isScalar, T1))
 
     assert(__cmp([c1, c1][], [c2, c2][]) < 0);
     assert(__cmp([c2, c2], [c1, c1]) > 0);
+    assert(__cmp([c2, c2], [c2, c1]) > 0);
+}
+
+// Compiler hook into the runtime implementation of array (vector) operations.
+template _arrayOp(Args...)
+{
+    import core.internal.arrayop;
+    alias _arrayOp = arrayOp!Args;
 }
 
 // Helper functions
@@ -3694,7 +3732,7 @@ private inout(TypeInfo) getElement(inout TypeInfo value) @trusted pure nothrow
     {
         if(auto qualified = cast(TypeInfo_Const) element)
             element = qualified.base;
-        else if(auto redefined = cast(TypeInfo_Typedef) element) // typedef & enum
+        else if(auto redefined = cast(TypeInfo_Enum) element)
             element = redefined.base;
         else if(auto staticArray = cast(TypeInfo_StaticArray) element)
             element = staticArray.value;
