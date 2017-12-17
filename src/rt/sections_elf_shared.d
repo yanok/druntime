@@ -57,7 +57,7 @@ else
     static assert(0, "unimplemented");
 }
 import core.sys.posix.pthread;
-version (DigitalMars) import rt.deh;
+import rt.deh;
 import rt.dmain2;
 import rt.minfo;
 import rt.util.container.array;
@@ -370,7 +370,7 @@ version (Shared)
     {
         /*
          * Section in executable that contains copy relocations.
-         * null when druntime is dynamically loaded by a C host.
+         * Might be null when druntime is dynamically loaded by a C host.
          */
         __gshared const(void)[] _copyRelocSection;
     }
@@ -495,8 +495,9 @@ extern(C) void _d_dso_registry(void* arg)
                 // We don't want to depend on __tls_get_addr in non-Shared builds
                 // so we can actually link statically, so there must be only one
                 // D shared object.
+                import core.internal.abort;
                 _loadedDSOs.empty ||
-                    assert(0, "Only one D shared object allowed for static runtime");
+                    abort("Only one D shared object allowed for static runtime");
             }
             foreach (p; _loadedDSOs) assert(p !is pdso);
             _loadedDSOs.insertBack(pdso);
@@ -562,20 +563,26 @@ extern(C) void _d_dso_registry(void* arg)
             }
 
             unsetDSOForHandle(pdso, pdso._handle);
-            pdso._handle = null;
         }
         else
         {
             // static DSOs are unloaded in reverse order
-            static if (SharedELF) assert(pdso._tlsSize == _tlsRanges.back.length);
-            _tlsRanges.popBack();
             assert(pdso == _loadedDSOs.back);
             _loadedDSOs.popBack();
         }
 
         freeDSO(pdso);
 
-        if (_loadedDSOs.empty) finiLocks(); // last DSO
+        // last DSO being unloaded => shutdown registry
+        if (_loadedDSOs.empty)
+        {
+            version (Shared)
+            {
+                assert(_handleToDSO.empty);
+                _handleToDSO.reset();
+            }
+            finiLocks();
+        }
     }
 }
 
@@ -715,7 +722,12 @@ version (Shared) void runFinalizers(DSO* pdso)
 void freeDSO(DSO* pdso) nothrow @nogc
 {
     pdso._gcRanges.reset();
-    version (Shared) pdso._codeSegments.reset();
+    version (Shared)
+    {
+        pdso._codeSegments.reset();
+        pdso._deps.reset();
+        pdso._handle = null;
+    }
     .free(pdso);
 }
 
@@ -825,7 +837,7 @@ version (Shared)
 ///////////////////////////////////////////////////////////////////////////////
 
 /************
- * Scan segments in the image header and stores
+ * Scan segments in the image header and store
  * the TLS and writeable data segments in *pdso.
  */
 static if (SharedELF) void scanSegments(in ref dl_phdr_info info, DSO* pdso) nothrow @nogc
@@ -1135,7 +1147,6 @@ body
     }
 }
 
-
 /**************************
  * Input:
  *      addr  an internal address of a DSO
@@ -1225,7 +1236,7 @@ else version(PPC)
     enum TLS_DTV_OFFSET = 0x8000;
 else version(PPC64)
     enum TLS_DTV_OFFSET = 0x8000;
-else version(MIPS)
+else version(MIPS32)
     enum TLS_DTV_OFFSET = 0x8000;
 else version(MIPS64)
     enum TLS_DTV_OFFSET = 0x8000;

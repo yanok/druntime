@@ -79,6 +79,7 @@ else version (Windows)
  */
 class ThreadException : Exception
 {
+    // LDC: +@nogc
     @safe pure nothrow @nogc this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
     {
         super(msg, file, line, next);
@@ -128,9 +129,11 @@ private
      */
     extern(C) void* _d_eh_swapContext(void* newContext) nothrow @nogc;
 
-    version (DigitalMars)
+    // LDC: changed from `version (DigitalMars)`
+    version (all)
     {
-        version (Windows)
+        // LDC: changed from `version (Windows)`
+        version (CRuntime_Microsoft)
             alias swapContext = _d_eh_swapContext;
         else
         {
@@ -2088,6 +2091,9 @@ extern (C) void thread_init()
  */
 extern (C) void thread_term()
 {
+    destroy(Thread.sm_main);
+    Thread.sm_main = null;
+
     assert(Thread.sm_tbeg && Thread.sm_tlen == 1);
     assert(!Thread.nAboutToStart);
     if (Thread.pAboutToStart) // in case realloc(p, 0) doesn't return null
@@ -2392,6 +2398,9 @@ shared static ~this()
 
 // Used for needLock below.
 private __gshared bool multiThreadedFlag = false;
+
+version (LDC) {} else
+version (PPC64) version = ExternStackShell;
 
 version (ExternStackShell)
 {
@@ -3378,19 +3387,13 @@ private void* getStackBottom() nothrow @nogc
             // Use LLVM inline assembler to enable inlining.
             import ldc.llvmasm;
             version (X86)
-            {
                 return __asm!(void*)("movl %fs:(4), $0", "=r");
-            }
             else version (X86_64)
-            {
                 return __asm!(void*)("movq %gs:0($0), %rax", "={rax},r", 8);
-            }
             else
                 static assert(false, "Architecture not supported.");
         }
-        else
-        {
-        version (D_InlineAsm_X86)
+        else version (D_InlineAsm_X86)
             asm pure nothrow @nogc { naked; mov EAX, FS:4; ret; }
         else version(D_InlineAsm_X86_64)
             asm pure nothrow @nogc
@@ -3401,7 +3404,6 @@ private void* getStackBottom() nothrow @nogc
             }
         else
             static assert(false, "Architecture not supported.");
-        }
     }
     else version (Darwin)
     {
@@ -4300,7 +4302,9 @@ class Fiber
      *  fn = The fiber function.
      *  sz = The stack size for this fiber.
      *  guardPageSize = size of the guard page to trap fiber's stack
-     *                    overflows
+     *                  overflows. Beware that using this will increase
+     *                  the number of mmaped regions on platforms using mmap
+     *                  so an OS-imposed limit may be hit.
      *
      * In:
      *  fn must not be null.
@@ -4326,7 +4330,9 @@ class Fiber
      *  dg = The fiber function.
      *  sz = The stack size for this fiber.
      *  guardPageSize = size of the guard page to trap fiber's stack
-     *                    overflows
+     *                  overflows. Beware that using this will increase
+     *                  the number of mmaped regions on platforms using mmap
+     *                  so an OS-imposed limit may be hit.
      *
      * In:
      *  dg must not be null.

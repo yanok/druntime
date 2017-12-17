@@ -705,15 +705,15 @@ version( CRuntime_DigitalMars )
     private extern shared FILE[_NFILE] _iob;
 
     ///
-    shared stdin  = &_iob[0];
+    enum stdin  = &_iob[0];
     ///
-    shared stdout = &_iob[1];
+    enum stdout = &_iob[1];
     ///
-    shared stderr = &_iob[2];
+    enum stderr = &_iob[2];
     ///
-    shared stdaux = &_iob[3];
+    enum stdaux = &_iob[3];
     ///
-    shared stdprn = &_iob[4];
+    enum stdprn = &_iob[4];
 }
 else version( CRuntime_Microsoft )
 {
@@ -1264,28 +1264,6 @@ else version( FreeBSD )
     int  snprintf(scope char* s, size_t n, scope const char* format, ...);
     ///
     int  vsnprintf(scope char* s, size_t n, scope const char* format, va_list arg);
-}
-else version( NetBSD )
-{
-  // No unsafe pointer manipulation.
-  @trusted
-  {
-      ///
-    void rewind(FILE*);
-    ///
-    pure void clearerr(FILE*);
-    ///
-    pure int  feof(FILE*);
-    ///
-    pure int  ferror(FILE*);
-    ///
-    int  fileno(FILE*);
-  }
-
-  ///
-    int  snprintf(char* s, size_t n, in char* format, ...);
-    ///
-    int  vsnprintf(char* s, size_t n, in char* format, va_list arg);
 }
 else version( NetBSD )
 {
