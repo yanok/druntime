@@ -156,13 +156,80 @@ alias llvm_readcyclecounter readcyclecounter;
 pragma(LDC_intrinsic, "llvm.clear_cache")
     void llvm_clear_cache(void *from, void *to);
 
-
+version(INTRINSICS_FROM_600)
+{
+/// The ‘llvm.thread.pointer‘ intrinsic returns a pointer to the TLS area for the
+/// current thread. The exact semantics of this value are target specific: it may
+/// point to the start of TLS area, to the end, or somewhere in the middle. Depending
+/// on the target, this intrinsic may read a register, call a helper function, read
+/// from an alternate memory space, or perform other operations necessary to locate
+/// the TLS area. Not all targets support this intrinsic.
+pragma(LDC_intrinsic, "llvm.thread.pointer")
+    void* llvm_thread_pointer();
+}
 
 //
 // STANDARD C LIBRARY INTRINSICS
 //
 
 pure:
+
+version(INTRINSICS_FROM_700)
+{
+// The alignment parameter was removed from these memory intrinsics in LLVM 7.0. Instead, alignment
+// can be specified as an attribute on the ptr arguments.
+
+/// The 'llvm.memcpy.*' intrinsics copy a block of memory from the source
+/// location to the destination location.
+/// Note that, unlike the standard libc function, the llvm.memcpy.* intrinsics do
+/// not return a value.
+pragma(LDC_intrinsic, "llvm.memcpy.p0i8.p0i8.i#")
+    void llvm_memcpy(T)(void* dst, const(void)* src, T len, bool volatile_ = false)
+        if (__traits(isIntegral, T));
+
+
+/// The 'llvm.memmove.*' intrinsics move a block of memory from the source
+/// location to the destination location. It is similar to the 'llvm.memcpy'
+/// intrinsic but allows the two memory locations to overlap.
+/// Note that, unlike the standard libc function, the llvm.memmove.* intrinsics
+/// do not return a value.
+pragma(LDC_intrinsic, "llvm.memmove.p0i8.p0i8.i#")
+    void llvm_memmove(T)(void* dst, const(void)* src, T len, bool volatile_ = false)
+        if (__traits(isIntegral, T));
+
+/// The 'llvm.memset.*' intrinsics fill a block of memory with a particular byte
+/// value.
+/// Note that, unlike the standard libc function, the llvm.memset intrinsic does
+/// not return a value.
+pragma(LDC_intrinsic, "llvm.memset.p0i8.i#")
+    void llvm_memset(T)(void* dst, ubyte val, T len, bool volatile_ = false)
+        if (__traits(isIntegral, T));
+
+/// Convenience function that discards the alignment parameter and calls the 'llvm.memcpy.*' intrinsic.
+/// This function is here to support the function signature of the pre-LLVM7.0 intrinsic.
+void llvm_memcpy(T)(void* dst, const(void)* src, T len, uint alignment, bool volatile_ = false)
+    if (__traits(isIntegral, T))
+{
+    llvm_memcpy!T(dst, src, len, volatile_);
+}
+/// Convenience function that discards the alignment parameter and calls the 'llvm.memmove.*' intrinsic.
+/// This function is here to support the function signature of the pre-LLVM7.0 intrinsic.
+void llvm_memmove(T)(void* dst, const(void)* src, T len, uint alignment, bool volatile_ = false)
+    if (__traits(isIntegral, T))
+{
+    llvm_memmove!T(dst, src, len, volatile_);
+}
+/// Convenience function that discards the alignment parameter and calls the 'llvm.memset.*' intrinsic.
+/// This function is here to support the function signature of the pre-LLVM7.0 intrinsic.
+void llvm_memset(T)(void* dst, ubyte val, T len, uint alignment, bool volatile_ = false)
+    if (__traits(isIntegral, T))
+{
+    llvm_memset!T(dst, val, len, volatile_);
+}
+
+} // version(INTRINSICS_FROM_700)
+else
+{
 
 /// The 'llvm.memcpy.*' intrinsics copy a block of memory from the source
 /// location to the destination location.
@@ -188,6 +255,8 @@ pragma(LDC_intrinsic, "llvm.memmove.p0i8.p0i8.i#")
 pragma(LDC_intrinsic, "llvm.memset.p0i8.i#")
     void llvm_memset(T)(void* dst, ubyte val, T len, uint alignment, bool volatile_ = false)
         if (__traits(isIntegral, T));
+
+}
 
 @safe:
 
@@ -517,11 +586,12 @@ pragma(LDC_intrinsic, "llvm.trap")
 pragma(LDC_intrinsic, "llvm.debugtrap")
     void llvm_debugtrap();
 
-/// The llvm.expect intrinsic provides information about expected (the most
-/// probable) value of val, which can be used by optimizers.
-/// The llvm.expect intrinsic takes two arguments. The first argument is a
-/// value. The second argument is an expected value, this needs to be a
-/// constant value, variables are not allowed.
+/// Provides information about the expected (that is, most probable) runtime
+/// value of an integer expression to the optimizer.
+///
+/// Params:
+///     val = The runtime value, of integer type.
+///     expectedVal = The expected value of `val` – needs to be a constant!
 pragma(LDC_intrinsic, "llvm.expect.i#")
-    T llvm_expect(T)(T val, T expected_val)
+    T llvm_expect(T)(T val, T expectedVal)
         if (__traits(isIntegral, T));
