@@ -82,6 +82,16 @@ version( CRuntime_Glibc )
     int setitimer(int, in itimerval*, itimerval*);
     int utimes(in char*, ref const(timeval)[2]); // LEGACY
 }
+else version( CRuntime_Musl )
+{
+    struct timeval
+    {
+        time_t      tv_sec;
+        suseconds_t tv_usec;
+    }
+    int gettimeofday(timeval*, void*);
+    int utimes(in char*, ref const(timeval)[2]);
+}
 else version( Darwin )
 {
     struct timeval

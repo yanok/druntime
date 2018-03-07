@@ -11,6 +11,7 @@
 module rt.sections_elf_shared;
 
 version (CRuntime_Glibc) enum SharedELF = true;
+else version (CRuntime_Musl) enum SharedELF = true;
 else version (FreeBSD) enum SharedELF = true;
 else version (NetBSD) enum SharedELF = true;
 else enum SharedELF = false;
@@ -753,7 +754,9 @@ version (Shared)
         {
             if (dyn.d_tag == DT_STRTAB)
             {
-                version (linux)
+                version (CRuntime_Musl)
+                    strtab = cast(const(char)*)(info.dlpi_addr + dyn.d_un.d_ptr); // relocate
+                else version (linux)
                     strtab = cast(const(char)*)dyn.d_un.d_ptr;
                 else version (FreeBSD)
                     strtab = cast(const(char)*)(info.dlpi_addr + dyn.d_un.d_ptr); // relocate

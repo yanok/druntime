@@ -121,6 +121,10 @@ else version( CRuntime_Bionic )
     // Added since Lollipop
     int posix_memalign(void**, size_t, size_t);
 }
+else version( CRuntime_Musl )
+{
+    int posix_memalign(void**, size_t, size_t);
+}
 
 //
 // C Extension (CX)
@@ -178,6 +182,11 @@ else version( Solaris )
     int unsetenv(in char*);
 
     void* valloc(size_t); // LEGACY non-standard
+}
+else version( CRuntime_Musl )
+{
+    int setenv(in char*, in char*, int);
+    int unsetenv(in char*);
 }
 
 //
@@ -492,6 +501,13 @@ else version( CRuntime_Bionic )
     void    srand48(c_long);
     void    srandom(uint s) { srand48(s); }
     int     unlockpt(int);
+}
+else version( CRuntime_Musl )
+{
+    char*  realpath(in char*, char*);
+    int    putenv(char*);
+    int    mkstemp(char*);
+
 }
 else version( Solaris )
 {
