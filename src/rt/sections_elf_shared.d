@@ -3,7 +3,7 @@
  * This module provides ELF-specific support for sections with shared libraries.
  *
  * Copyright: Copyright Martin Nowak 2012-2013.
- * License:   $(WEB www.boost.org/LICENSE_1_0.txt, Boost License 1.0).
+ * License:   $(HTTP www.boost.org/LICENSE_1_0.txt, Boost License 1.0).
  * Authors:   Martin Nowak
  * Source: $(DRUNTIMESRC src/rt/_sections_linux.d)
  */
@@ -14,6 +14,8 @@ version (CRuntime_Glibc) enum SharedELF = true;
 else version (CRuntime_Musl) enum SharedELF = true;
 else version (FreeBSD) enum SharedELF = true;
 else version (NetBSD) enum SharedELF = true;
+else version (DragonFlyBSD) enum SharedELF = true;
+else version (CRuntime_UClibc) enum SharedELF = true;
 else enum SharedELF = false;
 
 version (OSX) enum SharedDarwin = true;
@@ -52,6 +54,12 @@ else version (NetBSD)
     import core.sys.netbsd.dlfcn;
     import core.sys.netbsd.sys.elf;
     import core.sys.netbsd.sys.link_elf;
+}
+else version (DragonFlyBSD)
+{
+    import core.sys.dragonflybsd.dlfcn;
+    import core.sys.dragonflybsd.sys.elf;
+    import core.sys.dragonflybsd.sys.link_elf;
 }
 else
 {
@@ -112,6 +120,7 @@ private:
     invariant()
     {
         assert(_moduleGroup.modules.length);
+        version (CRuntime_UClibc) {} else
         static if (SharedELF)
         {
             assert(_tlsMod || !_tlsSize);
@@ -146,6 +155,7 @@ __gshared bool _isRuntimeInitialized;
 
 
 version (FreeBSD) private __gshared void* dummy_ref;
+version (DragonFlyBSD) private __gshared void* dummy_ref;
 version (NetBSD) private __gshared void* dummy_ref;
 
 /****
@@ -156,6 +166,7 @@ void initSections() nothrow @nogc
     _isRuntimeInitialized = true;
     // reference symbol to support weak linkage
     version (FreeBSD) dummy_ref = &_d_dso_registry;
+    version (DragonFlyBSD) dummy_ref = &_d_dso_registry;
     version (NetBSD) dummy_ref = &_d_dso_registry;
 }
 
@@ -291,6 +302,7 @@ private:
 
 // start of linked list for ModuleInfo references
 version (FreeBSD) deprecated extern (C) __gshared void* _Dmodule_ref;
+version (DragonFlyBSD) deprecated extern (C) __gshared void* _Dmodule_ref;
 version (NetBSD) deprecated extern (C) __gshared void* _Dmodule_ref;
 
 version (Shared)
@@ -762,6 +774,8 @@ version (Shared)
                     strtab = cast(const(char)*)(info.dlpi_addr + dyn.d_un.d_ptr); // relocate
                 else version (NetBSD)
                     strtab = cast(const(char)*)(info.dlpi_addr + dyn.d_un.d_ptr); // relocate
+                else version (DragonFlyBSD)
+                    strtab = cast(const(char)*)(info.dlpi_addr + dyn.d_un.d_ptr); // relocate
                 else
                     static assert(0, "unimplemented");
                 break;
@@ -826,7 +840,12 @@ static if (SharedELF) void scanSegments(in ref dl_phdr_info info, DSO* pdso) not
 
         case PT_TLS: // TLS segment
             assert(!pdso._tlsSize); // is unique per DSO
-            pdso._tlsMod = info.dlpi_tls_modid;
+            version (CRuntime_UClibc)
+            {
+                // uClibc doesn't provide a 'dlpi_tls_modid' definition
+            }
+            else
+                pdso._tlsMod = info.dlpi_tls_modid;
             pdso._tlsSize = phdr.p_memsz;
 
             // align to multiple of size_t to avoid misaligned scanning
@@ -920,6 +939,10 @@ else version (NetBSD) bool findImageHeaderForAddr(in void* addr, dl_phdr_info* r
     auto dg = DG(addr, result);
     return dl_iterate_phdr(&callback, &dg) != 0;
 }
+else version (DragonFlyBSD) bool findImageHeaderForAddr(in void* addr, dl_phdr_info* result=null) nothrow @nogc
+{
+    return !!_rtld_addr_phdr(addr, result);
+}
 
 /*********************************
  * Determine if 'addr' lies within shared object 'info'.
@@ -946,6 +969,7 @@ version (linux) import core.sys.linux.errno : program_invocation_name;
 // should be in core.sys.freebsd.stdlib
 version (FreeBSD) extern(C) const(char)* getprogname() nothrow @nogc;
 version (OSX) extern(C) const(char)* getprogname() nothrow @nogc;
+version (DragonFlyBSD) extern(C) const(char)* getprogname() nothrow @nogc;
 version (NetBSD) extern(C) const(char)* getprogname() nothrow @nogc;
 
 @property const(char)* progname() nothrow @nogc
@@ -953,6 +977,7 @@ version (NetBSD) extern(C) const(char)* getprogname() nothrow @nogc;
     version (linux) return program_invocation_name;
     version (FreeBSD) return getprogname();
     version (OSX) return getprogname();
+    version (DragonFlyBSD) return getprogname();
     version (NetBSD) return getprogname();
 }
 

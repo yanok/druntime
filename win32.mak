@@ -207,6 +207,7 @@ copydir: $(IMPDIR)
 	mkdir $(IMPDIR)\core\internal
 	mkdir $(IMPDIR)\core\sys\darwin\mach
 	mkdir $(IMPDIR)\core\sys\freebsd\sys
+	mkdir $(IMPDIR)\core\sys\dragonflybsd\sys
 	mkdir $(IMPDIR)\core\sys\linux\sys
 	mkdir $(IMPDIR)\core\sys\osx\mach
 	mkdir $(IMPDIR)\core\sys\posix\arpa
@@ -445,6 +446,51 @@ $(IMPDIR)\core\sys\freebsd\sys\link_elf.d : src\core\sys\freebsd\sys\link_elf.d
 $(IMPDIR)\core\sys\freebsd\sys\mman.d : src\core\sys\freebsd\sys\mman.d
 	copy $** $@
 
+$(IMPDIR)\core\sys\dragonflybsd\dlfcn.d : src\core\sys\dragonflybsd\dlfcn.d
+	copy $** $@
+
+$(IMPDIR)\core\sys\dragonflybsd\execinfo.d : src\core\sys\dragonflybsd\execinfo.d
+	copy $** $@
+
+$(IMPDIR)\core\sys\dragonflybsd\pthread_np.d : src\core\sys\dragonflybsd\pthread_np.d
+	copy $** $@
+
+$(IMPDIR)\core\sys\dragonflybsd\time.d : src\core\sys\dragonflybsd\time.d
+	copy $** $@
+
+$(IMPDIR)\core\sys\dragonflybsd\netinet\in_.d : src\core\sys\dragonflybsd\netinet\in_.d
+	copy $** $@
+
+$(IMPDIR)\core\sys\dragonflybsd\sys\cdefs.d : src\core\sys\dragonflybsd\sys\cdefs.d
+	copy $** $@
+
+$(IMPDIR)\core\sys\dragonflybsd\sys\_bitset.d : src\core\sys\dragonflybsd\sys\_bitset.d
+	copy $** $@
+
+$(IMPDIR)\core\sys\dragonflybsd\sys\_cpuset.d : src\core\sys\dragonflybsd\sys\_cpuset.d
+	copy $** $@
+
+$(IMPDIR)\core\sys\dragonflybsd\sys\elf.d : src\core\sys\dragonflybsd\sys\elf.d
+	copy $** $@
+
+$(IMPDIR)\core\sys\dragonflybsd\sys\elf_common.d : src\core\sys\dragonflybsd\sys\elf_common.d
+	copy $** $@
+
+$(IMPDIR)\core\sys\dragonflybsd\sys\elf32.d : src\core\sys\dragonflybsd\sys\elf32.d
+	copy $** $@
+
+$(IMPDIR)\core\sys\dragonflybsd\sys\elf64.d : src\core\sys\dragonflybsd\sys\elf64.d
+	copy $** $@
+
+$(IMPDIR)\core\sys\dragonflybsd\sys\event.d : src\core\sys\dragonflybsd\sys\event.d
+	copy $** $@
+
+$(IMPDIR)\core\sys\dragonflybsd\sys\link_elf.d : src\core\sys\dragonflybsd\sys\link_elf.d
+	copy $** $@
+
+$(IMPDIR)\core\sys\dragonflybsd\sys\mman.d : src\core\sys\dragonflybsd\sys\mman.d
+	copy $** $@
+
 $(IMPDIR)\core\sys\linux\config.d : src\core\sys\linux\config.d
 	copy $** $@
 
@@ -569,6 +615,9 @@ $(IMPDIR)\core\sys\osx\sys\mman.d : src\core\sys\osx\sys\mman.d
 	copy $** $@
 
 $(IMPDIR)\core\sys\posix\arpa\inet.d : src\core\sys\posix\arpa\inet.d
+	copy $** $@
+
+$(IMPDIR)\core\sys\posix\aio.d : src\core\sys\posix\aio.d
 	copy $** $@
 
 $(IMPDIR)\core\sys\posix\config.d : src\core\sys\posix\config.d

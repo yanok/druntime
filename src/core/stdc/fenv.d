@@ -263,6 +263,24 @@ else version ( OpenBSD )
 
     alias fexcept_t = uint;
 }
+else version ( DragonFlyBSD )
+{
+    struct fenv_t
+    {
+        struct _x87
+        {
+                uint control;
+                uint status;
+                uint tag;
+                uint[4] others;
+        };
+        _x87 x87;
+
+        uint mxcsr;
+    }
+
+    alias uint fexcept_t;
+}
 else version( CRuntime_Bionic )
 {
     version(X86)
@@ -282,6 +300,16 @@ else version( CRuntime_Bionic )
     else version(ARM)
     {
         alias uint fenv_t;
+        alias uint fexcept_t;
+    }
+    else version(AArch64)
+    {
+        struct fenv_t
+        {
+            uint   __control;
+            uint   __status;
+        }
+
         alias uint fexcept_t;
     }
     else
@@ -330,6 +358,72 @@ else version( CRuntime_Musl )
             uint   __mxcsr;
         }
         alias ushort fexcept_t;
+    }
+    else
+    {
+        static assert(false, "Architecture not supported.");
+    }
+}
+else version( CRuntime_UClibc )
+{
+    version (X86)
+    {
+        struct fenv_t
+        {
+            ushort __control_word;
+            ushort __unused1;
+            ushort __status_word;
+            ushort __unused2;
+            ushort __tags;
+            ushort __unused3;
+            uint   __eip;
+            ushort __cs_selector;
+            ushort __opcode;
+            uint   __data_offset;
+            ushort __data_selector;
+            ushort __unused5;
+        }
+
+        alias fexcept_t = ushort;
+    }
+    else version (X86_64)
+    {
+        struct fenv_t
+        {
+            ushort __control_word;
+            ushort __unused1;
+            ushort __status_word;
+            ushort __unused2;
+            ushort __tags;
+            ushort __unused3;
+            uint   __eip;
+            ushort __cs_selector;
+            ushort __opcode;
+            uint   __data_offset;
+            ushort __data_selector;
+            ushort __unused5;
+            uint   __mxcsr;
+        }
+
+        alias fexcept_t = ushort;
+    }
+    else version (MIPS32)
+    {
+        struct fenv_t
+        {
+            uint __fp_control_register;
+        }
+
+        alias fexcept_t = ushort;
+    }
+    else version (ARM)
+    {
+        struct fenv_t
+        {
+            uint __cw;
+        }
+
+        alias fexcept_t = uint;
     }
     else
     {
@@ -649,6 +743,12 @@ else version( OpenBSD )
     ///
     enum FE_DFL_ENV = &__fe_dfl_env;
 }
+else version( DragonFlyBSD )
+{
+    private extern const fenv_t __fe_dfl_env;
+    ///
+    enum FE_DFL_ENV = &__fe_dfl_env;
+}
 else version( CRuntime_Bionic )
 {
     private extern const fenv_t __fe_dfl_env;
@@ -662,6 +762,11 @@ else version( Solaris )
     enum FE_DFL_ENV = &__fenv_def_env;
 }
 else version( CRuntime_Musl )
+{
+    ///
+    enum FE_DFL_ENV = cast(fenv_t*)(-1);
+}
+else version( CRuntime_UClibc )
 {
     ///
     enum FE_DFL_ENV = cast(fenv_t*)(-1);

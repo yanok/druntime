@@ -8,6 +8,9 @@ endif
 ifeq ($(OS)-$(BUILD),freebsd-debug)
 	TESTS:=$(TESTS) line_trace
 endif
+ifeq ($(OS)-$(BUILD),dragonflybsd-debug)
+	TESTS:=$(TESTS) line_trace
+endif
 
 ifneq (default,$(MODEL))
 	MODEL_FLAG:=-m$(MODEL)
@@ -47,13 +50,8 @@ $(ROOT)/%.done: $(ROOT)/%
 	$(NEGATE) $(QUIET)$(TIMELIMIT)$(ROOT)/$* $(RUN_ARGS) 2>&1 1>/dev/null | grep -qF $(STDERR_EXP)
 	@touch $@
 
-$(ROOT)/line_trace.done: $(ROOT)/line_trace
-	@echo Testing line_trace
-	@rm -f line_trace.output
-	$(QUIET)./$(ROOT)/line_trace $(RUN_ARGS) >line_trace.output
-	$(QUIET)$(SED) "s/\[0x[0-9a-f]*\]/\[ADDR\]/g" line_trace.output | $(DIFF) line_trace.exp -
-	@touch $@
-
+# LDC: Make sure allocation intended to provoke exception is not elided.
+$(ROOT)/invalid_memory_operation: DFLAGS+=-disable-gc2stack
 $(ROOT)/unittest_assert: DFLAGS+=-unittest
 $(ROOT)/line_trace: DFLAGS+=-L--export-dynamic
 $(ROOT)/%: $(SRC)/%.d

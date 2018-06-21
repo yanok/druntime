@@ -4,7 +4,7 @@
  * $(C_HEADER_DESCRIPTION pubs.opengroup.org/onlinepubs/009695399/basedefs/_stdarg.h.html, _stdarg.h)
  *
  * Copyright: Copyright Digital Mars 2000 - 2009.
- * License:   $(WEB www.boost.org/LICENSE_1_0.txt, Boost License 1.0).
+ * License:   $(HTTP www.boost.org/LICENSE_1_0.txt, Boost License 1.0).
  * Authors:   Walter Bright, Hauke Duden
  * Standards: ISO/IEC 9899:1999 (E)
  * Source: $(DRUNTIMESRC core/stdc/_stdarg.d)
@@ -183,9 +183,14 @@ version (LDC)
              * http://refspecs.linuxfoundation.org/ELF/ppc64/PPC-elf64abi-1.9.html#PARAM-PASS
              */
 
-            // This works for all types because only the rules for non-floating,
-            // non-vector types are used.
-            auto p = (T.sizeof < size_t.sizeof ? ap + (size_t.sizeof - T.sizeof) : ap);
+            // Chapter 3.1.4 and 3.2.3: Alignment may require the va_list pointer to first
+            // be aligned before accessing a value.
+            if (T.alignof >= 8)
+                ap = cast(va_list)((cast(size_t)ap + 7) & ~7);
+            version( BigEndian )
+                auto p = (T.sizeof < size_t.sizeof ? ap + (size_t.sizeof - T.sizeof) : ap);
+            version( LittleEndian )
+                auto p = ap;
             T arg = *cast(T*)p;
             ap += (T.sizeof + size_t.sizeof - 1) & ~(size_t.sizeof - 1);
             return arg;
@@ -315,9 +320,14 @@ version (LDC)
              * http://refspecs.linuxfoundation.org/ELF/ppc64/PPC-elf64abi-1.9.html#PARAM-PASS
              */
 
-            // This works for all types because only the rules for non-floating,
-            // non-vector types are used.
-            auto p = (tsize < size_t.sizeof ? ap + (size_t.sizeof - tsize) : ap);
+            // Chapter 3.1.4 and 3.2.3: Alignment may require the va_list pointer to first
+            // be aligned before accessing a value.
+            if (ti.alignof >= 8)
+                ap = cast(va_list)((cast(size_t)ap + 7) & ~7);
+            version( BigEndian )
+                auto p = (tsize < size_t.sizeof ? ap + (size_t.sizeof - tsize) : ap);
+            version( LittleEndian )
+                auto p = ap;
             ap += (tsize + size_t.sizeof - 1) & ~(size_t.sizeof - 1);
         }
         else version( MIPS64 )
