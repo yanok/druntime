@@ -674,10 +674,7 @@ extern (C) UnitTestResult runModuleUnitTests()
         }
     }
 
-    import core.internal.traits : externDFunc;
-    alias rt_configCallBack = string delegate(string) @nogc nothrow;
-    alias fn_configOption = string function(string opt, scope rt_configCallBack dg, bool reverse) @nogc nothrow;
-    alias rt_configOption = externDFunc!("rt.config.rt_configOption", fn_configOption);
+    import core.internal.parseoptions : rt_configOption;
 
     if (results.passed != results.executed)
     {
@@ -817,6 +814,13 @@ Throwable.TraceInfo defaultTraceHandler( void* ptr = null )
 
                 // backtrace() failed, do it ourselves. Only works if frame
                 // pointer elimination is disabled.
+              version(LDC)
+              {
+                import ldc.intrinsics;
+                auto stackTop = cast(void**) llvm_frameaddress(0);
+              }
+              else
+              {
                 static void** getBasePtr()
                 {
                     version( D_InlineAsm_X86 )
@@ -829,6 +833,7 @@ Throwable.TraceInfo defaultTraceHandler( void* ptr = null )
                 }
 
                 auto  stackTop    = getBasePtr();
+              }
                 auto  stackBottom = cast(void**) thread_stackBottom();
                 void* dummy;
 

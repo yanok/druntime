@@ -52,6 +52,9 @@ struct Image
         if (dbgSectionIndex != -1)
         {
             auto dbgSectionHeader = ElfSectionHeader(&file, dbgSectionIndex);
+            // we don't support compressed debug sections
+            if ((dbgSectionHeader.shdr.sh_flags & SHF_COMPRESSED) != 0)
+                return null;
             // debug_line section found and loaded
             return ElfSection(&file, &dbgSectionHeader);
         }
@@ -97,16 +100,8 @@ struct Image
                 return 0;
 
             obj.set = true;
-            // search for the executable code segment
-            foreach (const ref phdr; info.dlpi_phdr[0 .. info.dlpi_phnum])
-            {
-                if (phdr.p_type == PT_LOAD && phdr.p_flags & PF_X)
-                {
-                    obj.begin = info.dlpi_addr + phdr.p_vaddr;
-                    return 0;
-                }
-            }
-            // fall back to the base address of the object file
+
+            // use the base address of the object file
             obj.begin = info.dlpi_addr;
             return 0;
         }
