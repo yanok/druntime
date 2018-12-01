@@ -10,7 +10,7 @@
 module ldc.intrinsics;
 
 // Check for the right compiler
-version(LDC)
+version (LDC)
 {
     // OK
 }
@@ -19,47 +19,38 @@ else
     static assert(false, "This module is only valid for LDC");
 }
 
-version(LDC_LLVM_307)
+version (LDC_LLVM_309)
 {
 }
-else version(LDC_LLVM_308)
+else version (LDC_LLVM_400)
 {
-    version = INTRINSICS_FROM_308;
-}
-else version(LDC_LLVM_309)
-{
-    version = INTRINSICS_FROM_308;
-    version = INTRINSICS_FROM_309;
-}
-else version(LDC_LLVM_400)
-{
-    version = INTRINSICS_FROM_308;
-    version = INTRINSICS_FROM_309;
     version = INTRINSICS_FROM_400;
 }
-else version(LDC_LLVM_500)
+else version (LDC_LLVM_500)
 {
-    version = INTRINSICS_FROM_308;
-    version = INTRINSICS_FROM_309;
     version = INTRINSICS_FROM_400;
     version = INTRINSICS_FROM_500;
 }
-else version(LDC_LLVM_600)
+else version (LDC_LLVM_600)
 {
-    version = INTRINSICS_FROM_308;
-    version = INTRINSICS_FROM_309;
     version = INTRINSICS_FROM_400;
     version = INTRINSICS_FROM_500;
     version = INTRINSICS_FROM_600;
 }
-else version(LDC_LLVM_700)
+else version (LDC_LLVM_700)
 {
-    version = INTRINSICS_FROM_308;
-    version = INTRINSICS_FROM_309;
     version = INTRINSICS_FROM_400;
     version = INTRINSICS_FROM_500;
     version = INTRINSICS_FROM_600;
     version = INTRINSICS_FROM_700;
+}
+else version (LDC_LLVM_800)
+{
+    version = INTRINSICS_FROM_400;
+    version = INTRINSICS_FROM_500;
+    version = INTRINSICS_FROM_600;
+    version = INTRINSICS_FROM_700;
+    version = INTRINSICS_FROM_800;
 }
 else
 {
@@ -156,7 +147,7 @@ alias llvm_readcyclecounter readcyclecounter;
 pragma(LDC_intrinsic, "llvm.clear_cache")
     void llvm_clear_cache(void *from, void *to);
 
-version(INTRINSICS_FROM_600)
+version (INTRINSICS_FROM_600)
 {
 /// The ‘llvm.thread.pointer‘ intrinsic returns a pointer to the TLS area for the
 /// current thread. The exact semantics of this value are target specific: it may
@@ -174,7 +165,7 @@ pragma(LDC_intrinsic, "llvm.thread.pointer")
 
 pure:
 
-version(INTRINSICS_FROM_700)
+version (INTRINSICS_FROM_700)
 {
 // The alignment parameter was removed from these memory intrinsics in LLVM 7.0. Instead, alignment
 // can be specified as an attribute on the ptr arguments.
@@ -239,7 +230,7 @@ void llvm_memset(T)(void* dst, ubyte val, T len, uint alignment, bool volatile_ 
         llvm_memset!T(dst, val, len, false);
 }
 
-} // version(INTRINSICS_FROM_700)
+} // version (INTRINSICS_FROM_700)
 else
 {
 
@@ -409,14 +400,11 @@ pragma(LDC_intrinsic, "llvm.maxnum.f#")
 // BIT MANIPULATION INTRINSICS
 //
 
-version(INTRINSICS_FROM_309)
-{
 /// The 'llvm.bitreverse' family of intrinsics is used to reverse the bitpattern
 /// of an integer value; for example 0b10110110 becomes 0b01101101.
 pragma(LDC_intrinsic, "llvm.bitreverse.i#")
     T llvm_bitreverse(T)(T val)
         if (__traits(isIntegral, T));
-}
 
 /// The 'llvm.bswap' family of intrinsics is used to byte swap integer values
 /// with an even number of bytes (positive multiple of 16 bits). These are

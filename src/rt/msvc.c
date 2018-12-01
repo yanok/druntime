@@ -34,7 +34,9 @@ FILE* __iob_func();                 // VS2013-
 int _set_output_format(int format); // VS2013-
 
 //extern const char* __acrt_iob_func;
+#ifndef LDC
 extern const char* _nullfunc = 0;
+#endif
 
 #if defined _M_IX86
     #define C_PREFIX "_"
@@ -47,12 +49,19 @@ extern const char* _nullfunc = 0;
 #define DECLARE_ALTERNATE_NAME(name, alternate_name)  \
     __pragma(comment(linker, "/alternatename:" C_PREFIX #name "=" C_PREFIX #alternate_name))
 
+#ifndef LDC
 DECLARE_ALTERNATE_NAME (__acrt_iob_func, _nullfunc);
 DECLARE_ALTERNATE_NAME (__iob_func, _nullfunc);
 DECLARE_ALTERNATE_NAME (_set_output_format, _nullfunc);
+#endif
 
 void init_msvc()
 {
+#ifdef LDC
+    stdin = __acrt_iob_func(0);
+    stdout = __acrt_iob_func(1);
+    stderr = __acrt_iob_func(2);
+#else
     if (&__acrt_iob_func != (void*) &_nullfunc)
     {
         stdin = __acrt_iob_func(0);
@@ -71,7 +80,25 @@ void init_msvc()
         const int _TWO_DIGIT_EXPONENT = 1;
         _set_output_format(_TWO_DIGIT_EXPONENT);
     }
+#endif // !LDC
 }
+
+#ifdef LDC
+
+// needed for POSIX names
+#pragma comment(lib, "oldnames.lib")
+// VS2015+: printf/scanf family defined inline in C headers
+#pragma comment(lib, "legacy_stdio_definitions.lib")
+
+// The MinGW-w64 libs don't provide _(_)chkstk; fall back to the
+// implementation in LLVM's builtins compiler-rt lib.
+#ifdef _M_X64
+DECLARE_ALTERNATE_NAME (__chkstk, ___chkstk_ms);
+#else
+DECLARE_ALTERNATE_NAME (_chkstk, __chkstk); // `__chkstk_ms` isn't the MS-compatible one!
+#endif
+
+#else // !LDC
 
 // VS2015+ provides C99-conformant (v)snprintf functions, so weakly
 // link to legacy _(v)snprintf (not C99-conformant!) for VS2013- only
@@ -157,6 +184,8 @@ int  _msvc_fileno(FILE* stream)
     return stream->_file;
 }
 
+#endif // !LDC
+
 
 
 /**
@@ -186,10 +215,3 @@ DECLARE_ALTERNATE_NAME (fmodf,  _msvc_fmodf);
 DECLARE_ALTERNATE_NAME (modff,  _msvc_modff);
 
 #endif // _M_IX86
-
-// LDC
-#pragma comment(lib, "oldnames.lib") // needed for POSIX names
-#if _MSC_VER >= 1900 // VS2015+
-    // needed for some symbols that are inline functions in the C headers
-    #pragma comment(lib, "legacy_stdio_definitions.lib")
-#endif

@@ -16,11 +16,8 @@
  */
 module ldc.profile;
 
-version(LDC_LLVM_309) version = HASHED_FUNC_NAMES;
-version(LDC_LLVM_400) version = HASHED_FUNC_NAMES;
-version(LDC_LLVM_500) version = HASHED_FUNC_NAMES;
-version(LDC_LLVM_600) version = HASHED_FUNC_NAMES;
-version(LDC_LLVM_700) version = HASHED_FUNC_NAMES;
+version = HASHED_FUNC_NAMES;
+version = PROFILEDATA_309_LAYOUT;
 
 @nogc:
 nothrow:
@@ -30,67 +27,7 @@ nothrow:
  */
 extern(C++) struct ProfileData {
     // This has to match INSTR_PROF_DATA in profile-rt/InstrProfData.inc
-
-    version(LDC_LLVM_307)
-    {
-        uint NameSize;
-        uint NumCounters;
-        ulong FuncHash;
-        immutable(char)* Name;
-        ulong* Counters;
-    }
-    else version(LDC_LLVM_308)
-    {
-        uint NameSize;
-        uint NumCounters;
-        ulong FuncHash;
-        immutable(char)* Name;
-        ulong* Counters;
-        void* FunctionPointer;
-        void* Values;
-        ushort NumValueSites;
-    }
-    else version(LDC_LLVM_309)
-    {
-        ulong NameRef;
-        ulong FuncHash;
-        ulong* Counters;
-        void* FunctionPointer;
-        void* Values;
-        uint NumCounters;
-        ushort NumValueSites;
-    }
-    else version(LDC_LLVM_400)
-    {
-        ulong NameRef;
-        ulong FuncHash;
-        ulong* Counters;
-        void* FunctionPointer;
-        void* Values;
-        uint NumCounters;
-        ushort NumValueSites;
-    }
-    else version(LDC_LLVM_500)
-    {
-        ulong NameRef;
-        ulong FuncHash;
-        ulong* Counters;
-        void* FunctionPointer;
-        void* Values;
-        uint NumCounters;
-        ushort NumValueSites;
-    }
-    else version(LDC_LLVM_600)
-    {
-        ulong NameRef;
-        ulong FuncHash;
-        ulong* Counters;
-        void* FunctionPointer;
-        void* Values;
-        uint NumCounters;
-        ushort NumValueSites;
-    }
-    else version(LDC_LLVM_700)
+    version (PROFILEDATA_309_LAYOUT)
     {
         ulong NameRef;
         ulong FuncHash;
@@ -159,7 +96,7 @@ void resetCounts(alias F)()
 const(ProfileData)* getData(alias F)()
     // TODO: add constraint on F
 {
-    version(Win32)
+    version (Win32)
     {
         import std.traits : functionLinkage;
         static if (functionLinkage!F == "D")
@@ -172,7 +109,7 @@ const(ProfileData)* getData(alias F)()
         enum mangledName = F.mangleof;
     }
 
-    version(HASHED_FUNC_NAMES)
+    version (HASHED_FUNC_NAMES)
     {
         import std.digest.md;
         import std.bitmanip;
@@ -184,7 +121,7 @@ const(ProfileData)* getData(alias F)()
               e = __llvm_profile_end_data();
         data < e; ++data)
     {
-        version(HASHED_FUNC_NAMES)
+        version (HASHED_FUNC_NAMES)
         {
             if (nameref == (*data).NameRef)
                 return data;
