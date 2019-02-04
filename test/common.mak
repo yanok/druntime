@@ -1,5 +1,6 @@
 # set from top makefile
-# LDC: No top makefile for us; don't clear OS variable (use environment variable).
+# LDC: we have no top makefile, include osmodel.mak for OS
+include ../../../../tests/d2/src/osmodel.mak
 #OS:=
 MODEL:=
 BUILD:=
@@ -29,4 +30,8 @@ ifeq ($(BUILD),debug)
 else
 	DFLAGS += -O -release
 	CFLAGS += -O3
+endif
+CXXFLAGS:=$(CFLAGS) -std=c++11
+ifeq (osx,$(OS))
+	CXXFLAGS+=-stdlib=libc++
 endif
