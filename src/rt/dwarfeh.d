@@ -727,21 +727,32 @@ extern (C) _Unwind_Reason_Code _d_eh_personality_common(_Unwind_Action actions,
  * Look at the chain of inflight exceptions and pick the class type that'll
  * be looked for in catch clauses.
  * Params:
+ *      lsda = pointer to LSDA table
  *      exceptionObject = language specific exception information
  * Returns:
  *      class type to look for
  */
-ClassInfo getClassInfo(_Unwind_Exception* exceptionObject)
+ClassInfo getClassInfo(const(ubyte)* lsda, _Unwind_Exception* exceptionObject)
 {
     ExceptionHeader* eh = ExceptionHeader.toExceptionHeader(exceptionObject);
     Throwable ehobject = eh.object;
-    debug (EH_personality) writeln("start: %p '%.*s'", ehobject, ehobject.classinfo.info.name.length, ehobject.classinfo.info.name.ptr);
+    debug (EH_personality) writeln("start: %p '%.*s'", ehobject, cast(int)ehobject.classinfo.info.name.length, ehobject.classinfo.info.name.ptr);
     for (ExceptionHeader* ehn = eh.next; ehn; ehn = ehn.next)
     {
-        debug (EH_personality) writeln("ehn =   %p '%.*s'", ehn.object, ehn.object.classinfo.info.name.length, ehn.object.classinfo.info.name.ptr);
+        // like __dmd_personality_v0, don't combine when the exceptions are from different functions
+        // (fixes issue 19831, exception thrown and caught while inside finally block)
+        if (ehn.languageSpecificData != lsda)
+        {
+            debug (EH_personality) writeln("break: %p %p", lsda, ehn.languageSpecificData);
+            break;
+        }
+
+        debug (EH_personality) writeln("ehn =   %p '%.*s'", ehn.object, cast(int)ehn.object.classinfo.info.name.length, ehn.object.classinfo.info.name.ptr);
         Error e = cast(Error)ehobject;
         if (e is null || (cast(Error)ehn.object) !is null)
+        {
             ehobject = ehn.object;
+        }
     }
     debug (EH_personality) writeln("end  : %p", ehobject);
     return ehobject.classinfo;
@@ -966,7 +977,7 @@ LsdaResult scanLSDA(const(ubyte)* lsda, _Unwind_Ptr ip, _Unwind_Exception_Class 
                     return true;
                 }
 
-                auto h = actionTableLookup(exceptionObject, cast(uint)ActionRecordPtr, pActionTable, tt, TType, exceptionClass);
+                auto h = actionTableLookup(lsda, exceptionObject, cast(uint)ActionRecordPtr, pActionTable, tt, TType, exceptionClass);
                 if (h < 0)
                 {
                     fprintf(stderr, "negative handler\n");
@@ -1129,6 +1140,7 @@ LsdaResult scanLSDA(const(ubyte)* lsda, _Unwind_Ptr ip, _Unwind_Exception_Class 
 /********************************************
  * Look up classType in Action Table.
  * Params:
+ *      lsda = pointer to LSDA table
  *      exceptionObject = language specific exception information
  *      actionRecordPtr = starting index in Action Table + 1
  *      pActionTable = pointer to start of Action Table
@@ -1140,7 +1152,7 @@ LsdaResult scanLSDA(const(ubyte)* lsda, _Unwind_Ptr ip, _Unwind_Exception_Class 
  *      0 means classType is not in the Action Table
  *      <0 means corrupt
  */
-int actionTableLookup(_Unwind_Exception* exceptionObject, uint actionRecordPtr, const(ubyte)* pActionTable,
+int actionTableLookup(const(ubyte)* lsda, _Unwind_Exception* exceptionObject, uint actionRecordPtr, const(ubyte)* pActionTable,
                       const(ubyte)* tt, ubyte TType, _Unwind_Exception_Class exceptionClass)
 {
     debug (EH_personality)
@@ -1153,7 +1165,7 @@ int actionTableLookup(_Unwind_Exception* exceptionObject, uint actionRecordPtr, 
     ClassInfo thrownType;
     if (exceptionClass == dmdExceptionClass)
     {
-        thrownType = getClassInfo(exceptionObject);
+        thrownType = getClassInfo(lsda, exceptionObject);
     }
 
     for (auto ap = pActionTable + actionRecordPtr - 1; 1; )
