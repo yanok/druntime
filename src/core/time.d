@@ -164,7 +164,7 @@ version (CoreDdoc) enum ClockType
     normal = 0,
 
     /++
-        $(BLUE Linux-Only)
+        $(BLUE Linux,OpenBSD-Only)
 
         Uses $(D CLOCK_BOOTTIME).
       +/
@@ -214,7 +214,7 @@ version (CoreDdoc) enum ClockType
     precise = 3,
 
     /++
-        $(BLUE Linux,Solaris-Only)
+        $(BLUE Linux,OpenBSD,Solaris-Only)
 
         Uses $(D CLOCK_PROCESS_CPUTIME_ID).
       +/
@@ -251,14 +251,14 @@ version (CoreDdoc) enum ClockType
     second = 6,
 
     /++
-        $(BLUE Linux,Solaris-Only)
+        $(BLUE Linux,OpenBSD,Solaris-Only)
 
         Uses $(D CLOCK_THREAD_CPUTIME_ID).
       +/
     threadCPUTime = 7,
 
     /++
-        $(BLUE FreeBSD-Only)
+        $(BLUE DragonFlyBSD,FreeBSD,OpenBSD-Only)
 
         Uses $(D CLOCK_UPTIME).
       +/
@@ -319,6 +319,17 @@ else version (NetBSD) enum ClockType
     coarse = 2,
     precise = 3,
     second = 6,
+}
+else version (OpenBSD) enum ClockType
+{
+    normal = 0,
+    bootTime = 1,
+    coarse = 2,
+    precise = 3,
+    processCPUTime = 4,
+    second = 6,
+    threadCPUTime = 7,
+    uptime = 8,
 }
 else version (DragonFlyBSD) enum ClockType
 {
@@ -393,6 +404,21 @@ version (Posix)
             case coarse: return CLOCK_MONOTONIC;
             case normal: return CLOCK_MONOTONIC;
             case precise: return CLOCK_MONOTONIC;
+            case second: assert(0);
+            }
+        }
+        else version (OpenBSD)
+        {
+            import core.sys.openbsd.time;
+            with(ClockType) final switch (clockType)
+            {
+            case bootTime: return CLOCK_BOOTTIME;
+            case coarse: return CLOCK_MONOTONIC;
+            case normal: return CLOCK_MONOTONIC;
+            case precise: return CLOCK_MONOTONIC;
+            case processCPUTime: return CLOCK_PROCESS_CPUTIME_ID;
+            case threadCPUTime: return CLOCK_THREAD_CPUTIME_ID;
+            case uptime: return CLOCK_UPTIME;
             case second: assert(0);
             }
         }
@@ -544,9 +570,9 @@ public:
 
     unittest
     {
-        foreach (T; _TypeTuple!(Duration, const Duration, immutable Duration))
+        foreach (T; AliasSeq!(Duration, const Duration, immutable Duration))
         {
-            foreach (U; _TypeTuple!(Duration, const Duration, immutable Duration))
+            foreach (U; AliasSeq!(Duration, const Duration, immutable Duration))
             {
                 T t = 42;
                 // workaround https://issues.dlang.org/show_bug.cgi?id=18296
@@ -560,9 +586,9 @@ public:
             }
         }
 
-        foreach (D; _TypeTuple!(Duration, const Duration, immutable Duration))
+        foreach (D; AliasSeq!(Duration, const Duration, immutable Duration))
         {
-            foreach (E; _TypeTuple!(Duration, const Duration, immutable Duration))
+            foreach (E; AliasSeq!(Duration, const Duration, immutable Duration))
             {
                 assert((cast(D)Duration(12)).opCmp(cast(E)Duration(12)) == 0);
                 assert((cast(D)Duration(-12)).opCmp(cast(E)Duration(-12)) == 0);
@@ -623,9 +649,9 @@ public:
 
     unittest
     {
-        foreach (D; _TypeTuple!(Duration, const Duration, immutable Duration))
+        foreach (D; AliasSeq!(Duration, const Duration, immutable Duration))
         {
-            foreach (E; _TypeTuple!(Duration, const Duration, immutable Duration))
+            foreach (E; AliasSeq!(Duration, const Duration, immutable Duration))
             {
                 assert((cast(D)Duration(5)) + (cast(E)Duration(7)) == Duration(12));
                 assert((cast(D)Duration(5)) - (cast(E)Duration(7)) == Duration(-2));
@@ -656,7 +682,7 @@ public:
                 assert((cast(D)Duration(-7)) % (cast(E)Duration(5)) == Duration(-2));
             }
 
-            foreach (T; _TypeTuple!(TickDuration, const TickDuration, immutable TickDuration))
+            foreach (T; AliasSeq!(TickDuration, const TickDuration, immutable TickDuration))
             {
                 assertApprox((cast(D)Duration(5)) + cast(T)TickDuration.from!"usecs"(7), Duration(70), Duration(80));
                 assertApprox((cast(D)Duration(5)) - cast(T)TickDuration.from!"usecs"(7), Duration(-70), Duration(-60));
@@ -705,9 +731,9 @@ public:
 
     unittest
     {
-        foreach (D; _TypeTuple!(Duration, const Duration, immutable Duration))
+        foreach (D; AliasSeq!(Duration, const Duration, immutable Duration))
         {
-            foreach (T; _TypeTuple!(TickDuration, const TickDuration, immutable TickDuration))
+            foreach (T; AliasSeq!(TickDuration, const TickDuration, immutable TickDuration))
             {
                 assertApprox((cast(T)TickDuration.from!"usecs"(7)) + cast(D)Duration(5), Duration(70), Duration(80));
                 assertApprox((cast(T)TickDuration.from!"usecs"(7)) - cast(D)Duration(5), Duration(60), Duration(70));
@@ -750,7 +776,7 @@ public:
         Params:
             rhs = The duration to add to or subtract from this $(D Duration).
       +/
-    ref Duration opOpAssign(string op, D)(in D rhs) nothrow @nogc
+    ref Duration opOpAssign(string op, D)(const scope D rhs) nothrow @nogc
         if (((op == "+" || op == "-" || op == "%") && is(_Unqual!D == Duration)) ||
            ((op == "+" || op == "-") && is(_Unqual!D == TickDuration)))
     {
@@ -779,7 +805,7 @@ public:
             assertApprox(actual, lower, upper, "op assign failed", line);
         }
 
-        foreach (E; _TypeTuple!(Duration, const Duration, immutable Duration))
+        foreach (E; AliasSeq!(Duration, const Duration, immutable Duration))
         {
             test1!"+="(Duration(5), (cast(E)Duration(7)), Duration(12));
             test1!"-="(Duration(5), (cast(E)Duration(7)), Duration(-2));
@@ -810,7 +836,7 @@ public:
             test1!"%="(Duration(-7), (cast(E)Duration(-5)), Duration(-2));
         }
 
-        foreach (T; _TypeTuple!(TickDuration, const TickDuration, immutable TickDuration))
+        foreach (T; AliasSeq!(TickDuration, const TickDuration, immutable TickDuration))
         {
             test2!"+="(Duration(5), cast(T)TickDuration.from!"usecs"(7), Duration(70), Duration(80));
             test2!"-="(Duration(5), cast(T)TickDuration.from!"usecs"(7), Duration(-70), Duration(-60));
@@ -833,9 +859,9 @@ public:
             test2!"-="(Duration(-7), cast(T)TickDuration.from!"usecs"(-5), Duration(38), Duration(48));
         }
 
-        foreach (D; _TypeTuple!(const Duration, immutable Duration))
+        foreach (D; AliasSeq!(const Duration, immutable Duration))
         {
-            foreach (E; _TypeTuple!(Duration, const Duration, immutable Duration,
+            foreach (E; AliasSeq!(Duration, const Duration, immutable Duration,
                                    TickDuration, const TickDuration, immutable TickDuration))
             {
                 D lhs = D(120);
@@ -868,7 +894,7 @@ public:
 
     unittest
     {
-        foreach (D; _TypeTuple!(Duration, const Duration, immutable Duration))
+        foreach (D; AliasSeq!(Duration, const Duration, immutable Duration))
         {
             assert((cast(D)Duration(5)) * 7 == Duration(35));
             assert((cast(D)Duration(7)) * 5 == Duration(35));
@@ -889,7 +915,7 @@ public:
 
     unittest
     {
-        foreach (D; _TypeTuple!(Duration, const Duration, immutable Duration))
+        foreach (D; AliasSeq!(Duration, const Duration, immutable Duration))
         {
             assert((cast(D)Duration(5)) / 7 == Duration(0));
             assert((cast(D)Duration(7)) / 5 == Duration(1));
@@ -1049,7 +1075,7 @@ public:
 
     unittest
     {
-        foreach (D; _TypeTuple!(Duration, const Duration, immutable Duration))
+        foreach (D; AliasSeq!(Duration, const Duration, immutable Duration))
         {
             assert(5 * cast(D)Duration(7) == Duration(35));
             assert(7 * cast(D)Duration(5) == Duration(35));
@@ -1080,7 +1106,7 @@ public:
 
     unittest
     {
-        foreach (D; _TypeTuple!(Duration, const Duration, immutable Duration))
+        foreach (D; AliasSeq!(Duration, const Duration, immutable Duration))
         {
             assert(-(cast(D)Duration(7)) == Duration(-7));
             assert(-(cast(D)Duration(5)) == Duration(-5));
@@ -1106,15 +1132,15 @@ public:
 
     unittest
     {
-        foreach (D; _TypeTuple!(Duration, const Duration, immutable Duration))
+        foreach (D; AliasSeq!(Duration, const Duration, immutable Duration))
         {
-            foreach (units; _TypeTuple!("seconds", "msecs", "usecs", "hnsecs"))
+            foreach (units; AliasSeq!("seconds", "msecs", "usecs", "hnsecs"))
             {
                 enum unitsPerSec = convert!("seconds", units)(1);
 
                 if (TickDuration.ticksPerSec >= unitsPerSec)
                 {
-                    foreach (T; _TypeTuple!(TickDuration, const TickDuration, immutable TickDuration))
+                    foreach (T; AliasSeq!(TickDuration, const TickDuration, immutable TickDuration))
                     {
                         auto t = TickDuration.from!units(1);
                         assertApprox(cast(T)cast(D)dur!units(1), t - TickDuration(1), t + TickDuration(1), units);
@@ -1279,11 +1305,11 @@ public:
 
         unittest
         {
-            foreach (T; _TypeTuple!(long, int, short, byte, ulong, uint, ushort, ubyte))
+            foreach (T; AliasSeq!(long, int, short, byte, ulong, uint, ushort, ubyte))
                 static assert(allAreMutableIntegralTypes!T);
-            foreach (T; _TypeTuple!(long, int, short, byte, ulong, uint, ushort, ubyte))
+            foreach (T; AliasSeq!(long, int, short, byte, ulong, uint, ushort, ubyte))
                 static assert(!allAreMutableIntegralTypes!(const T));
-            foreach (T; _TypeTuple!(char, wchar, dchar, float, double, real, string))
+            foreach (T; AliasSeq!(char, wchar, dchar, float, double, real, string))
                 static assert(!allAreMutableIntegralTypes!T);
             static assert(allAreMutableIntegralTypes!(long, int, short, byte));
             static assert(!allAreMutableIntegralTypes!(long, int, short, char, byte));
@@ -1346,7 +1372,7 @@ public:
 
     pure nothrow unittest
     {
-        foreach (D; _TypeTuple!(const Duration, immutable Duration))
+        foreach (D; AliasSeq!(const Duration, immutable Duration))
         {
             D d = dur!"weeks"(3) + dur!"days"(5) + dur!"hours"(19) + dur!"minutes"(7) +
                   dur!"seconds"(2) + dur!"hnsecs"(1234567);
@@ -1452,7 +1478,7 @@ public:
             static assert(!is(typeof(d.split("hnsecs", "seconds", "msecs")())));
             static assert(!is(typeof(d.split("seconds", "hnecs", "msecs")())));
             static assert(!is(typeof(d.split("seconds", "msecs", "msecs")())));
-            alias _TypeTuple!("nsecs", "hnsecs", "usecs", "msecs", "seconds",
+            alias AliasSeq!("nsecs", "hnsecs", "usecs", "msecs", "seconds",
                               "minutes", "hours", "days", "weeks") timeStrs;
             foreach (i, str; timeStrs[1 .. $])
                 static assert(!is(typeof(d.split!(timeStrs[i - 1], str)())));
@@ -1523,7 +1549,7 @@ public:
 
     unittest
     {
-        foreach (D; _TypeTuple!(const Duration, immutable Duration))
+        foreach (D; AliasSeq!(const Duration, immutable Duration))
         {
             assert((cast(D)dur!"weeks"(12)).total!"weeks" == 12);
             assert((cast(D)dur!"weeks"(12)).total!"days" == 84);
@@ -1629,7 +1655,7 @@ public:
 
     unittest
     {
-        foreach (D; _TypeTuple!(Duration, const Duration, immutable Duration))
+        foreach (D; AliasSeq!(Duration, const Duration, immutable Duration))
         {
             assert((cast(D)Duration(0)).toString() == "0 hnsecs");
             assert((cast(D)Duration(1)).toString() == "1 hnsec");
@@ -1687,7 +1713,7 @@ public:
 
     unittest
     {
-        foreach (D; _TypeTuple!(Duration, const Duration, immutable Duration))
+        foreach (D; AliasSeq!(Duration, const Duration, immutable Duration))
         {
             assert(!(cast(D)Duration(100)).isNegative);
             assert(!(cast(D)Duration(1)).isNegative);
@@ -1802,7 +1828,7 @@ unittest
                 return unsignedToTempString(val, 10);
         }
 
-        foreach (F; _TypeTuple!(int,uint,long,ulong,float,double,real))
+        foreach (F; AliasSeq!(int,uint,long,ulong,float,double,real))
         {
             F t1f = to!(U,F)(t1);
             F t2f = to!(U,F)(t2);
@@ -1928,7 +1954,7 @@ unittest
 
 unittest
 {
-    foreach (D; _TypeTuple!(Duration, const Duration, immutable Duration))
+    foreach (D; AliasSeq!(Duration, const Duration, immutable Duration))
     {
         assert(dur!"weeks"(7).total!"weeks" == 7);
         assert(dur!"days"(7).total!"days" == 7);
@@ -2261,7 +2287,7 @@ assert(before + timeElapsed == after);
 
     unittest
     {
-        static void test(in MonoTimeImpl before, in MonoTimeImpl after, in Duration min)
+        static void test(const scope MonoTimeImpl before, const scope MonoTimeImpl after, const scope Duration min)
         {
             immutable diff = after - before;
             assert(diff >= min);
@@ -2543,8 +2569,11 @@ unittest
 
     static bool clockSupported(ClockType c)
     {
-        version (Linux_Pre_2639) // skip CLOCK_BOOTTIME on older linux kernels
-            return c != ClockType.second && c != ClockType.bootTime;
+        // Skip unsupported clocks on older linux kernels, assume that only
+        // CLOCK_MONOTONIC and CLOCK_REALTIME exist, as that is the lowest
+        // common denominator supported by all versions of Linux pre-2.6.12.
+        version (Linux_Pre_2639)
+            return c == ClockType.normal || c == ClockType.precise;
         else
             return c != ClockType.second; // second doesn't work with MonoTimeImpl
 
@@ -2851,7 +2880,7 @@ struct TickDuration
 
     unittest
     {
-        foreach (T; _TypeTuple!(TickDuration, const TickDuration, immutable TickDuration))
+        foreach (T; AliasSeq!(TickDuration, const TickDuration, immutable TickDuration))
         {
             assert((cast(T)TickDuration(ticksPerSec)).seconds == 1);
             assert((cast(T)TickDuration(ticksPerSec - 1)).seconds == 0);
@@ -2922,9 +2951,9 @@ struct TickDuration
 
     unittest
     {
-        foreach (units; _TypeTuple!("seconds", "msecs", "usecs", "nsecs"))
+        foreach (units; AliasSeq!("seconds", "msecs", "usecs", "nsecs"))
         {
-            foreach (T; _TypeTuple!(TickDuration, const TickDuration, immutable TickDuration))
+            foreach (T; AliasSeq!(TickDuration, const TickDuration, immutable TickDuration))
             {
                 assertApprox((cast(T)TickDuration.from!units(1000)).to!(units, long)(),
                              500, 1500, units);
@@ -2952,14 +2981,14 @@ struct TickDuration
 
     unittest
     {
-        foreach (D; _TypeTuple!(Duration, const Duration, immutable Duration))
+        foreach (D; AliasSeq!(Duration, const Duration, immutable Duration))
         {
-            foreach (T; _TypeTuple!(TickDuration, const TickDuration, immutable TickDuration))
+            foreach (T; AliasSeq!(TickDuration, const TickDuration, immutable TickDuration))
             {
                 auto expected = dur!"seconds"(1);
                 assert(cast(D)cast(T)TickDuration.from!"seconds"(1) == expected);
 
-                foreach (units; _TypeTuple!("msecs", "usecs", "hnsecs"))
+                foreach (units; AliasSeq!("msecs", "usecs", "hnsecs"))
                 {
                     D actual = cast(D)cast(T)TickDuration.from!units(1_000_000);
                     assertApprox(actual, dur!units(900_000), dur!units(1_100_000));
@@ -3002,7 +3031,7 @@ struct TickDuration
 
     unittest
     {
-        foreach (T; _TypeTuple!(TickDuration, const TickDuration, immutable TickDuration))
+        foreach (T; AliasSeq!(TickDuration, const TickDuration, immutable TickDuration))
         {
             auto a = TickDuration.currSystemTick;
             auto result = a += cast(T)TickDuration.currSystemTick;
@@ -3014,7 +3043,7 @@ struct TickDuration
             assert(b == result);
             assert(b.to!("seconds", real)() <= 0);
 
-            foreach (U; _TypeTuple!(const TickDuration, immutable TickDuration))
+            foreach (U; AliasSeq!(const TickDuration, immutable TickDuration))
             {
                 U u = TickDuration(12);
                 static assert(!__traits(compiles, u += cast(T)TickDuration.currSystemTick));
@@ -3047,7 +3076,7 @@ struct TickDuration
 
     unittest
     {
-        foreach (T; _TypeTuple!(TickDuration, const TickDuration, immutable TickDuration))
+        foreach (T; AliasSeq!(TickDuration, const TickDuration, immutable TickDuration))
         {
             T a = TickDuration.currSystemTick;
             T b = TickDuration.currSystemTick;
@@ -3068,7 +3097,7 @@ struct TickDuration
 
     unittest
     {
-        foreach (T; _TypeTuple!(TickDuration, const TickDuration, immutable TickDuration))
+        foreach (T; AliasSeq!(TickDuration, const TickDuration, immutable TickDuration))
         {
             assert(-(cast(T)TickDuration(7)) == TickDuration(-7));
             assert(-(cast(T)TickDuration(5)) == TickDuration(-5));
@@ -3089,9 +3118,9 @@ struct TickDuration
 
     unittest
     {
-        foreach (T; _TypeTuple!(TickDuration, const TickDuration, immutable TickDuration))
+        foreach (T; AliasSeq!(TickDuration, const TickDuration, immutable TickDuration))
         {
-            foreach (U; _TypeTuple!(TickDuration, const TickDuration, immutable TickDuration))
+            foreach (U; AliasSeq!(TickDuration, const TickDuration, immutable TickDuration))
             {
                 T t = TickDuration.currSystemTick;
                 U u = t;
@@ -3101,9 +3130,9 @@ struct TickDuration
             }
         }
 
-        foreach (T; _TypeTuple!(TickDuration, const TickDuration, immutable TickDuration))
+        foreach (T; AliasSeq!(TickDuration, const TickDuration, immutable TickDuration))
         {
-            foreach (U; _TypeTuple!(TickDuration, const TickDuration, immutable TickDuration))
+            foreach (U; AliasSeq!(TickDuration, const TickDuration, immutable TickDuration))
             {
                 T t = TickDuration.currSystemTick;
                 U u = t + t;
@@ -3162,7 +3191,7 @@ struct TickDuration
         t1 *= 2.1;
         assert(t1 > t2);
 
-        foreach (T; _TypeTuple!(const TickDuration, immutable TickDuration))
+        foreach (T; AliasSeq!(const TickDuration, immutable TickDuration))
         {
             T t = TickDuration.currSystemTick;
             assert(!__traits(compiles, t *= 12));
@@ -3215,7 +3244,7 @@ struct TickDuration
 
         _assertThrown!TimeException(t2 /= 0);
 
-        foreach (T; _TypeTuple!(const TickDuration, immutable TickDuration))
+        foreach (T; AliasSeq!(const TickDuration, immutable TickDuration))
         {
             T t = TickDuration.currSystemTick;
             assert(!__traits(compiles, t /= 12));
@@ -3245,7 +3274,7 @@ struct TickDuration
 
     unittest
     {
-        foreach (T; _TypeTuple!(TickDuration, const TickDuration, immutable TickDuration))
+        foreach (T; AliasSeq!(TickDuration, const TickDuration, immutable TickDuration))
         {
             T t1 = TickDuration.currSystemTick;
             T t2 = t1 + t1;
@@ -3284,7 +3313,7 @@ struct TickDuration
 
     unittest
     {
-        foreach (T; _TypeTuple!(TickDuration, const TickDuration, immutable TickDuration))
+        foreach (T; AliasSeq!(TickDuration, const TickDuration, immutable TickDuration))
         {
             T t1 = TickDuration.currSystemTick;
             T t2 = t1 + t1;
@@ -3477,13 +3506,13 @@ unittest
 
 unittest
 {
-    foreach (units; _TypeTuple!("weeks", "days", "hours", "seconds", "msecs", "usecs", "hnsecs", "nsecs"))
+    foreach (units; AliasSeq!("weeks", "days", "hours", "seconds", "msecs", "usecs", "hnsecs", "nsecs"))
     {
         static assert(!__traits(compiles, convert!("years", units)(12)), units);
         static assert(!__traits(compiles, convert!(units, "years")(12)), units);
     }
 
-    foreach (units; _TypeTuple!("years", "months", "weeks", "days",
+    foreach (units; AliasSeq!("years", "months", "weeks", "days",
                                "hours", "seconds", "msecs", "usecs", "hnsecs", "nsecs"))
     {
         assert(convert!(units, units)(12) == 12);
@@ -3546,43 +3575,15 @@ unittest
 }
 
 
-// @@@DEPRECATED_2018-10@@@
-/++
-    $(RED Everything in druntime and Phobos that was using FracSec now uses
-          Duration for greater simplicity. So, FracSec has been deprecated.
-          It will be removed from the docs in October 2018, and removed
-          completely from druntime in October 2019.)
-
-    Represents fractional seconds.
-
-    This is the portion of the time which is smaller than a second and it cannot
-    hold values which would be greater than or equal to a second (or less than
-    or equal to a negative second).
-
-    It holds hnsecs internally, but you can create it using either milliseconds,
-    microseconds, or hnsecs. What it does is allow for a simple way to set or
-    adjust the fractional seconds portion of a $(D Duration) or a
-    $(REF SysTime, std,datetime) without having to worry about whether you're
-    dealing with milliseconds, microseconds, or hnsecs.
-
-    $(D FracSec)'s functions which take time unit strings do accept
-    $(D "nsecs"), but because the resolution of $(D Duration) and
-    $(REF SysTime, std,datetime) is hnsecs, you don't actually get precision higher
-    than hnsecs. $(D "nsecs") is accepted merely for convenience. Any values
-    given as nsecs will be converted to hnsecs using $(D convert) (which uses
-    truncating division when converting to smaller units).
-  +/
-deprecated("FracSec has been deprecated in favor of just using Duration for the sake of simplicity")
+// @@@DEPRECATED_2.089@@@
+deprecated("FracSec has been deprecated in favor of just using Duration for the sake of simplicity. " ~
+           "It will be removed in 2.089.")
 struct FracSec
 {
 @safe pure:
 
 public:
 
-    /++
-        A $(D FracSec) of $(D 0). It's shorter than doing something like
-        $(D FracSec.from!"msecs"(0)) and more explicit than $(D FracSec.init).
-      +/
     static @property nothrow @nogc FracSec zero() { return FracSec(0); }
 
     unittest
@@ -3591,19 +3592,6 @@ public:
     }
 
 
-    /++
-        Create a $(D FracSec) from the given units ($(D "msecs"), $(D "usecs"),
-        or $(D "hnsecs")).
-
-        Params:
-            units = The units to create a FracSec from.
-            value = The number of the given units passed the second.
-
-        Throws:
-            $(D TimeException) if the given value would result in a $(D FracSec)
-            greater than or equal to $(D 1) second or less than or equal to
-            $(D -1) seconds.
-      +/
     static FracSec from(string units)(long value)
         if (units == "msecs" ||
            units == "usecs" ||
@@ -3665,9 +3653,6 @@ public:
     }
 
 
-    /++
-        Returns the negation of this $(D FracSec).
-      +/
     FracSec opUnary(string op)() const nothrow @nogc
         if (op == "-")
     {
@@ -3678,7 +3663,7 @@ public:
     {
         foreach (val; [-7, -5, 0, 5, 7])
         {
-            foreach (F; _TypeTuple!(FracSec, const FracSec, immutable FracSec))
+            foreach (F; AliasSeq!(FracSec, const FracSec, immutable FracSec))
             {
                 F fs = FracSec(val);
                 assert(-fs == FracSec(-val));
@@ -3687,9 +3672,6 @@ public:
     }
 
 
-    /++
-        The value of this $(D FracSec) as milliseconds.
-      +/
     @property int msecs() const nothrow @nogc
     {
         return cast(int)convert!("hnsecs", "msecs")(_hnsecs);
@@ -3697,7 +3679,7 @@ public:
 
     unittest
     {
-        foreach (F; _TypeTuple!(FracSec, const FracSec, immutable FracSec))
+        foreach (F; AliasSeq!(FracSec, const FracSec, immutable FracSec))
         {
             assert(FracSec(0).msecs == 0);
 
@@ -3712,16 +3694,6 @@ public:
     }
 
 
-    /++
-        The value of this $(D FracSec) as milliseconds.
-
-        Params:
-            milliseconds = The number of milliseconds passed the second.
-
-        Throws:
-            $(D TimeException) if the given value is not less than $(D 1) second
-            and greater than a $(D -1) seconds.
-      +/
     @property void msecs(int milliseconds)
     {
         immutable hnsecs = cast(int)convert!("msecs", "hnsecs")(milliseconds);
@@ -3751,7 +3723,7 @@ public:
             test(999 * sign, FracSec(9_990_000 * sign));
         }
 
-        foreach (F; _TypeTuple!(const FracSec, immutable FracSec))
+        foreach (F; AliasSeq!(const FracSec, immutable FracSec))
         {
             F fs = FracSec(1234567);
             static assert(!__traits(compiles, fs.msecs = 12), F.stringof);
@@ -3759,9 +3731,6 @@ public:
     }
 
 
-    /++
-        The value of this $(D FracSec) as microseconds.
-      +/
     @property int usecs() const nothrow @nogc
     {
         return cast(int)convert!("hnsecs", "usecs")(_hnsecs);
@@ -3769,7 +3738,7 @@ public:
 
     unittest
     {
-        foreach (F; _TypeTuple!(FracSec, const FracSec, immutable FracSec))
+        foreach (F; AliasSeq!(FracSec, const FracSec, immutable FracSec))
         {
             assert(FracSec(0).usecs == 0);
 
@@ -3784,16 +3753,6 @@ public:
     }
 
 
-    /++
-        The value of this $(D FracSec) as microseconds.
-
-        Params:
-            microseconds = The number of microseconds passed the second.
-
-        Throws:
-            $(D TimeException) if the given value is not less than $(D 1) second
-            and greater than a $(D -1) seconds.
-      +/
     @property void usecs(int microseconds)
     {
         immutable hnsecs = cast(int)convert!("usecs", "hnsecs")(microseconds);
@@ -3824,7 +3783,7 @@ public:
             test(999_999 * sign, FracSec(9_999_990 * sign));
         }
 
-        foreach (F; _TypeTuple!(const FracSec, immutable FracSec))
+        foreach (F; AliasSeq!(const FracSec, immutable FracSec))
         {
             F fs = FracSec(1234567);
             static assert(!__traits(compiles, fs.usecs = 12), F.stringof);
@@ -3832,9 +3791,6 @@ public:
     }
 
 
-    /++
-        The value of this $(D FracSec) as hnsecs.
-      +/
     @property int hnsecs() const nothrow @nogc
     {
         return _hnsecs;
@@ -3842,7 +3798,7 @@ public:
 
     unittest
     {
-        foreach (F; _TypeTuple!(FracSec, const FracSec, immutable FracSec))
+        foreach (F; AliasSeq!(FracSec, const FracSec, immutable FracSec))
         {
             assert(FracSec(0).hnsecs == 0);
 
@@ -3857,16 +3813,6 @@ public:
     }
 
 
-    /++
-        The value of this $(D FracSec) as hnsecs.
-
-        Params:
-            hnsecs = The number of hnsecs passed the second.
-
-        Throws:
-            $(D TimeException) if the given value is not less than $(D 1) second
-            and greater than a $(D -1) seconds.
-      +/
     @property void hnsecs(int hnsecs)
     {
         _enforceValid(hnsecs);
@@ -3897,7 +3843,7 @@ public:
             test(9_999_999 * sign, FracSec(9_999_999 * sign));
         }
 
-        foreach (F; _TypeTuple!(const FracSec, immutable FracSec))
+        foreach (F; AliasSeq!(const FracSec, immutable FracSec))
         {
             F fs = FracSec(1234567);
             static assert(!__traits(compiles, fs.hnsecs = 12), F.stringof);
@@ -3905,12 +3851,6 @@ public:
     }
 
 
-    /++
-        The value of this $(D FracSec) as nsecs.
-
-        Note that this does not give you any greater precision
-        than getting the value of this $(D FracSec) as hnsecs.
-      +/
     @property int nsecs() const nothrow @nogc
     {
         return cast(int)convert!("hnsecs", "nsecs")(_hnsecs);
@@ -3918,7 +3858,7 @@ public:
 
     unittest
     {
-        foreach (F; _TypeTuple!(FracSec, const FracSec, immutable FracSec))
+        foreach (F; AliasSeq!(FracSec, const FracSec, immutable FracSec))
         {
             assert(FracSec(0).nsecs == 0);
 
@@ -3933,19 +3873,6 @@ public:
     }
 
 
-    /++
-        The value of this $(D FracSec) as nsecs.
-
-        Note that this does not give you any greater precision
-        than setting the value of this $(D FracSec) as hnsecs.
-
-        Params:
-            nsecs = The number of nsecs passed the second.
-
-        Throws:
-            $(D TimeException) if the given value is not less than $(D 1) second
-            and greater than a $(D -1) seconds.
-      +/
     @property void nsecs(long nsecs)
     {
         immutable hnsecs = cast(int)convert!("nsecs", "hnsecs")(nsecs);
@@ -3979,7 +3906,7 @@ public:
             test(9_999_999 * sign, FracSec(99_999 * sign));
         }
 
-        foreach (F; _TypeTuple!(const FracSec, immutable FracSec))
+        foreach (F; AliasSeq!(const FracSec, immutable FracSec))
         {
             F fs = FracSec(1234567);
             static assert(!__traits(compiles, fs.nsecs = 12), F.stringof);
@@ -3987,9 +3914,6 @@ public:
     }
 
 
-    /+
-        Converts this $(D TickDuration) to a string.
-      +/
     //Due to bug http://d.puremagic.com/issues/show_bug.cgi?id=3715 , we can't
     //have versions of toString() with extra modifiers, so we define one version
     //with modifiers and one without.
@@ -3999,9 +3923,6 @@ public:
     }
 
 
-    /++
-        Converts this $(D TickDuration) to a string.
-      +/
     //Due to bug http://d.puremagic.com/issues/show_bug.cgi?id=3715 , we can't
     //have versions of toString() with extra modifiers, so we define one version
     //with modifiers and one without.
@@ -4125,13 +4046,6 @@ private:
     }
 
 
-    /+
-        Returns whether the given number of hnsecs fits within the range of
-        $(D FracSec).
-
-        Params:
-            hnsecs = The number of hnsecs.
-      +/
     static bool _valid(int hnsecs) nothrow @nogc
     {
         immutable second = convert!("seconds", "hnsecs")(1);
@@ -4139,10 +4053,6 @@ private:
     }
 
 
-    /+
-        Throws:
-            $(D TimeException) if $(D valid(hnsecs)) is $(D false).
-      +/
     static void _enforceValid(int hnsecs)
     {
         if (!_valid(hnsecs))
@@ -4150,10 +4060,6 @@ private:
     }
 
 
-    /+
-        Params:
-            hnsecs = The number of hnsecs passed the second.
-      +/
     this(int hnsecs) nothrow @nogc
     {
         _hnsecs = hnsecs;
@@ -4615,11 +4521,7 @@ version (unittest) const(char)* numToStringz()(long value) @trusted pure nothrow
 }
 
 
-/+ A copy of std.typecons.TypeTuple. +/
-template _TypeTuple(TList...)
-{
-    alias TList _TypeTuple;
-}
+import core.internal.traits : AliasSeq;
 
 
 /+ An adjusted copy of std.exception.assertThrown. +/

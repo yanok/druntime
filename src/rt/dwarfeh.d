@@ -729,10 +729,11 @@ extern (C) _Unwind_Reason_Code _d_eh_personality_common(_Unwind_Action actions,
  * Params:
  *      lsda = pointer to LSDA table
  *      exceptionObject = language specific exception information
+ *      currentLsd = pointer to LSDA table
  * Returns:
  *      class type to look for
  */
-ClassInfo getClassInfo(const(ubyte)* lsda, _Unwind_Exception* exceptionObject)
+ClassInfo getClassInfo(_Unwind_Exception* exceptionObject, const(ubyte)* currentLsd)
 {
     ExceptionHeader* eh = ExceptionHeader.toExceptionHeader(exceptionObject);
     Throwable ehobject = eh.object;
@@ -741,9 +742,9 @@ ClassInfo getClassInfo(const(ubyte)* lsda, _Unwind_Exception* exceptionObject)
     {
         // like __dmd_personality_v0, don't combine when the exceptions are from different functions
         // (fixes issue 19831, exception thrown and caught while inside finally block)
-        if (ehn.languageSpecificData != lsda)
+        if (ehn.languageSpecificData != currentLsd)
         {
-            debug (EH_personality) writeln("break: %p %p", lsda, ehn.languageSpecificData);
+            debug (EH_personality) writeln("break: %p %p", currentLsd, ehn.languageSpecificData);
             break;
         }
 
@@ -977,7 +978,7 @@ LsdaResult scanLSDA(const(ubyte)* lsda, _Unwind_Ptr ip, _Unwind_Exception_Class 
                     return true;
                 }
 
-                auto h = actionTableLookup(lsda, exceptionObject, cast(uint)ActionRecordPtr, pActionTable, tt, TType, exceptionClass);
+                auto h = actionTableLookup(exceptionObject, cast(uint)ActionRecordPtr, pActionTable, tt, TType, exceptionClass, lsda);
                 if (h < 0)
                 {
                     fprintf(stderr, "negative handler\n");
@@ -1147,13 +1148,14 @@ LsdaResult scanLSDA(const(ubyte)* lsda, _Unwind_Ptr ip, _Unwind_Exception_Class 
  *      tt = pointer past end of Type Table
  *      TType = encoding of entries in Type Table
  *      exceptionClass = which language threw the exception
+ *      lsda = pointer to LSDA table
  * Returns:
  *      >=1 means the handler index of the classType
  *      0 means classType is not in the Action Table
  *      <0 means corrupt
  */
-int actionTableLookup(const(ubyte)* lsda, _Unwind_Exception* exceptionObject, uint actionRecordPtr, const(ubyte)* pActionTable,
-                      const(ubyte)* tt, ubyte TType, _Unwind_Exception_Class exceptionClass)
+int actionTableLookup(_Unwind_Exception* exceptionObject, uint actionRecordPtr, const(ubyte)* pActionTable,
+                      const(ubyte)* tt, ubyte TType, _Unwind_Exception_Class exceptionClass, const(ubyte)* lsda)
 {
     debug (EH_personality)
     {
@@ -1165,7 +1167,7 @@ int actionTableLookup(const(ubyte)* lsda, _Unwind_Exception* exceptionObject, ui
     ClassInfo thrownType;
     if (exceptionClass == dmdExceptionClass)
     {
-        thrownType = getClassInfo(lsda, exceptionObject);
+        thrownType = getClassInfo(exceptionObject, lsda);
     }
 
     for (auto ap = pActionTable + actionRecordPtr - 1; 1; )

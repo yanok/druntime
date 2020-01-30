@@ -72,18 +72,7 @@ import rt.dmain2;
 import rt.minfo;
 import rt.util.container.array;
 import rt.util.container.hashtab;
-
-/****
- * Asserts the specified condition, independent from -release, by abort()ing.
- * Regular assertions throw an AssertError and thus require an initialized
- * GC, which isn't the case (yet or anymore) for the startup/shutdown code in
- * this module (called by CRT ctors/dtors etc.).
- */
-private void safeAssert(bool condition, scope string msg, size_t line = __LINE__) @nogc nothrow @safe
-{
-    import core.internal.abort;
-    condition || abort(msg, __FILE__, line);
-}
+import rt.util.utility : safeAssert;
 
 alias DSO SectionGroup;
 struct DSO
@@ -113,7 +102,7 @@ struct DSO
         return _moduleGroup.modules;
     }
 
-    @property ref inout(ModuleGroup) moduleGroup() inout nothrow @nogc
+    @property ref inout(ModuleGroup) moduleGroup() inout return nothrow @nogc
     {
         return _moduleGroup;
     }
@@ -169,7 +158,9 @@ private:
         }
         else static if (SharedDarwin)
         {
-            return getTLSRange(_getTLSAnchor());
+            auto range = getTLSRange(_getTLSAnchor());
+            safeAssert(range !is null, "Could not determine TLS range.");
+            return range;
         }
         else static assert(0, "unimplemented");
     }
@@ -230,6 +221,15 @@ version (Shared)
     {
         foreach (ref tdso; *tdsos)
             dg(tdso._tlsRange.ptr, tdso._tlsRange.ptr + tdso._tlsRange.length);
+    }
+
+    size_t sizeOfTLS() nothrow @nogc
+    {
+        auto tdsos = initTLSRanges();
+        size_t sum;
+        foreach (ref tdso; *tdsos)
+            sum += tdso._tlsRange.length;
+        return sum;
     }
 
     // interface for core.thread to inherit loaded libraries
@@ -306,7 +306,13 @@ else
      */
     Array!(void[])* initTLSRanges() nothrow @nogc
     {
-        return &_tlsRanges();
+        auto rngs = &_tlsRanges();
+        if (rngs.empty)
+        {
+            foreach (ref pdso; _loadedDSOs)
+                rngs.insertBack(pdso.tlsRange());
+        }
+        return rngs;
     }
 
     void finiTLSRanges(Array!(void[])* rngs) nothrow @nogc
@@ -318,6 +324,15 @@ else
     {
         foreach (rng; *rngs)
             dg(rng.ptr, rng.ptr + rng.length);
+    }
+
+    size_t sizeOfTLS() nothrow @nogc
+    {
+        auto rngs = initTLSRanges();
+        size_t sum;
+        foreach (rng; *rngs)
+            sum += rng.length;
+        return sum;
     }
 }
 
@@ -372,15 +387,6 @@ version (Shared)
     __gshared pthread_mutex_t _handleToDSOMutex;
     @property ref HashTab!(void*, DSO*) _handleToDSO() @nogc nothrow { __gshared HashTab!(void*, DSO*) x; return x; }
     //__gshared HashTab!(void*, DSO*) _handleToDSO;
-
-    static if (SharedELF)
-    {
-        /*
-         * Section in executable that contains copy relocations.
-         * Might be null when druntime is dynamically loaded by a C host.
-         */
-        __gshared const(void)[] _copyRelocSection;
-    }
 }
 else
 {
@@ -428,7 +434,7 @@ T[] toRange(T)(T* beg, T* end) { return beg[0 .. end - beg]; }
 
 /* For each shared library and executable, the compiler generates code that
  * sets up CompilerDSOData and calls _d_dso_registry().
- * A pointer to that code is inserted into both the .ctors and .dtors
+ * A pointer to that code is inserted into both the .init_array and .fini_array
  * segment so it gets called by the loader on startup and shutdown.
  */
 extern(C) void _d_dso_registry(void* arg)
@@ -747,7 +753,7 @@ version (Shared)
         !pthread_mutex_unlock(&_handleToDSOMutex) || assert(0);
     }
 
-    static if (SharedELF) void getDependencies(in ref dl_phdr_info info, ref Array!(DSO*) deps)
+    static if (SharedELF) void getDependencies(const scope ref dl_phdr_info info, ref Array!(DSO*) deps)
     {
         // get the entries of the .dynamic section
         ElfW!"Dyn"[] dyns;
@@ -819,7 +825,7 @@ version (Shared)
  * Scan segments in the image header and store
  * the TLS and writeable data segments in *pdso.
  */
-static if (SharedELF) void scanSegments(in ref dl_phdr_info info, DSO* pdso) nothrow @nogc
+static if (SharedELF) void scanSegments(const scope ref dl_phdr_info info, DSO* pdso) nothrow @nogc
 {
     foreach (ref phdr; info.dlpi_phdr[0 .. info.dlpi_phnum])
     {
@@ -942,7 +948,7 @@ bool findImageHeaderForAddr(in void* addr, ImageHeader* result=null) nothrow @no
  * Determine if 'addr' lies within shared object 'info'.
  * If so, return true and fill in 'result' with the corresponding ELF program header.
  */
-static if (SharedELF) bool findSegmentForAddr(in ref dl_phdr_info info, in void* addr, ElfW!"Phdr"* result=null) nothrow @nogc
+static if (SharedELF) bool findSegmentForAddr(const scope ref dl_phdr_info info, const scope void* addr, ElfW!"Phdr"* result=null) nothrow @nogc
 {
     if (addr < cast(void*)info.dlpi_addr) // less than base address of object means quick reject
         return false;
@@ -1032,10 +1038,8 @@ struct tls_index
     }
 }
 
-version (OSX)
+static if (SharedDarwin)
 {
-    extern(C) void _d_dyld_getTLSRange(void*, void**, size_t*) nothrow @nogc;
-
     version (LDC)
     {
         private align(16) ubyte dummyTlsSymbol = 42;
@@ -1044,14 +1048,10 @@ version (OSX)
         // for https://github.com/ldc-developers/ldc/issues/1252
     }
 
-    void[] getTLSRange(void *tlsSymbol) nothrow @nogc
-    {
-        void* start = null;
-        size_t size = 0;
-        _d_dyld_getTLSRange(tlsSymbol, &start, &size);
-        assert(start && size, "Could not determine TLS range.");
-        return start[0 .. size];
-    }
+    version (X86_64)
+        import rt.sections_osx_x86_64 : getTLSRange;
+    else
+        static assert(0, "Not implemented for this architecture");
 }
 else
 {

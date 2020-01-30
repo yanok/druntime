@@ -315,10 +315,10 @@ version (none)
     // Our implementation returns an arbitrary non-zero value if the bit was
     // set, which is not what std.bitmanip expects.
     pragma(LDC_intrinsic, "ldc.bitop.bt")
-        int bt(in size_t* p, size_t bitnum) pure @system;
+        int bt(const scope size_t* p, size_t bitnum) pure @system;
 }
 else
-int bt(in size_t* p, size_t bitnum) pure @system
+int bt(const scope size_t* p, size_t bitnum) pure @system
 {
     static if (size_t.sizeof == 8)
         return ((p[bitnum >> 6] & (1L << (bitnum & 63)))) != 0;
@@ -886,82 +886,14 @@ version (DigitalMars) version (AnyX86)
 }
 
 
-/*************************************
- * Read/write value from/to the memory location indicated by ptr.
- *
- * These functions are recognized by the compiler, and calls to them are guaranteed
- * to not be removed (as dead assignment elimination or presumed to have no effect)
- * or reordered in the same thread.
- *
- * These reordering guarantees are only made with regards to other
- * operations done through these functions; the compiler is free to reorder regular
- * loads/stores with regards to loads/stores done through these functions.
- *
- * This is useful when dealing with memory-mapped I/O (MMIO) where a store can
- * have an effect other than just writing a value, or where sequential loads
- * with no intervening stores can retrieve
- * different values from the same location due to external stores to the location.
- *
- * These functions will, when possible, do the load/store as a single operation. In
- * general, this is possible when the size of the operation is less than or equal to
- * $(D (void*).sizeof), although some targets may support larger operations. If the
- * load/store cannot be done as a single operation, multiple smaller operations will be used.
- *
- * These are not to be conflated with atomic operations. They do not guarantee any
- * atomicity. This may be provided by coincidence as a result of the instructions
- * used on the target, but this should not be relied on for portable programs.
- * Further, no memory fences are implied by these functions.
- * They should not be used for communication between threads.
- * They may be used to guarantee a write or read cycle occurs at a specified address.
- */
-
-version (LDC)
+deprecated("volatileLoad has been moved to core.volatile. Use core.volatile.volatileLoad instead.")
 {
-    pragma(LDC_intrinsic, "ldc.bitop.vld")
-        ubyte volatileLoad(ubyte* ptr);
-    pragma(LDC_intrinsic, "ldc.bitop.vld")
-        ushort volatileLoad(ushort* ptr);  /// ditto
-    pragma(LDC_intrinsic, "ldc.bitop.vld")
-        uint volatileLoad(uint* ptr);      /// ditto
-    pragma(LDC_intrinsic, "ldc.bitop.vld")
-        ulong volatileLoad(ulong* ptr);    /// ditto
-
-    pragma(LDC_intrinsic, "ldc.bitop.vst")
-        void volatileStore(ubyte* ptr, ubyte value);   /// ditto
-    pragma(LDC_intrinsic, "ldc.bitop.vst")
-        void volatileStore(ushort* ptr, ushort value); /// ditto
-    pragma(LDC_intrinsic, "ldc.bitop.vst")
-        void volatileStore(uint* ptr, uint value);     /// ditto
-    pragma(LDC_intrinsic, "ldc.bitop.vst")
-        void volatileStore(ulong* ptr, ulong value);   /// ditto
+    public import core.volatile : volatileLoad;
 }
-else
+
+deprecated("volatileStore has been moved to core.volatile. Use core.volatile.volatileStore instead.")
 {
-
-ubyte  volatileLoad(ubyte * ptr);
-ushort volatileLoad(ushort* ptr);  /// ditto
-uint   volatileLoad(uint  * ptr);  /// ditto
-ulong  volatileLoad(ulong * ptr);  /// ditto
-
-void volatileStore(ubyte * ptr, ubyte  value);   /// ditto
-void volatileStore(ushort* ptr, ushort value);   /// ditto
-void volatileStore(uint  * ptr, uint   value);   /// ditto
-void volatileStore(ulong * ptr, ulong  value);   /// ditto
-
-} // !LDC
-
-@system unittest
-{
-    alias TT(T...) = T;
-
-    foreach (T; TT!(ubyte, ushort, uint, ulong))
-    {
-        T u;
-        T* p = &u;
-        volatileStore(p, 1);
-        T r = volatileLoad(p);
-        assert(r == u);
-    }
+    public import core.volatile : volatileStore;
 }
 
 
@@ -1156,28 +1088,28 @@ version (D_InlineAsm_X86_64)
  *  Bitwise rotate `value` left (`rol`) or right (`ror`) by
  *  `count` bit positions.
  */
-pure T rol(T)(in T value, in uint count)
+pure T rol(T)(const T value, const uint count)
     if (__traits(isIntegral, T) && __traits(isUnsigned, T))
 {
     assert(count < 8 * T.sizeof);
     return cast(T) ((value << count) | (value >> (-count & (T.sizeof * 8 - 1))));
 }
 /// ditto
-pure T ror(T)(in T value, in uint count)
+pure T ror(T)(const T value, const uint count)
     if (__traits(isIntegral, T) && __traits(isUnsigned, T))
 {
     assert(count < 8 * T.sizeof);
     return cast(T) ((value >> count) | (value << (-count & (T.sizeof * 8 - 1))));
 }
 /// ditto
-pure T rol(uint count, T)(in T value)
+pure T rol(uint count, T)(const T value)
     if (__traits(isIntegral, T) && __traits(isUnsigned, T))
 {
     static assert(count < 8 * T.sizeof);
     return cast(T) ((value << count) | (value >> (-count & (T.sizeof * 8 - 1))));
 }
 /// ditto
-pure T ror(uint count, T)(in T value)
+pure T ror(uint count, T)(const T value)
     if (__traits(isIntegral, T) && __traits(isUnsigned, T))
 {
     static assert(count < 8 * T.sizeof);
@@ -1187,20 +1119,20 @@ pure T ror(uint count, T)(in T value)
 ///
 unittest
 {
-    ubyte a = 0b10101010U;
-    ulong b = ulong.max;
+    ubyte a = 0b11110000U;
+    ulong b = ~1UL;
 
-    assert(rol(a, 1) == 0b01010101);
-    assert(ror(a, 1) == 0b01010101);
-    assert(rol(a, 3) == 0b01010101);
-    assert(ror(a, 3) == 0b01010101);
+    assert(rol(a, 1) == 0b11100001);
+    assert(ror(a, 1) == 0b01111000);
+    assert(rol(a, 3) == 0b10000111);
+    assert(ror(a, 3) == 0b00011110);
 
     assert(rol(a, 0) == a);
     assert(ror(a, 0) == a);
 
-    assert(rol(b, 63) == ulong.max);
-    assert(ror(b, 63) == ulong.max);
+    assert(rol(b, 63) == ~(1UL << 63));
+    assert(ror(b, 63) == ~2UL);
 
-    assert(rol!3(a) == 0b01010101);
-    assert(ror!3(a) == 0b01010101);
+    assert(rol!3(a) == 0b10000111);
+    assert(ror!3(a) == 0b00011110);
 }

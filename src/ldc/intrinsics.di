@@ -1,4 +1,4 @@
-﻿/*
+/*
  * This module holds declarations to LLVM intrinsics.
  *
  * See the LLVM language reference for more information:
@@ -68,6 +68,16 @@ else version (LDC_LLVM_900)
     version = INTRINSICS_FROM_800;
     version = INTRINSICS_FROM_900;
 }
+else version (LDC_LLVM_1000)
+{
+    version = INTRINSICS_FROM_400;
+    version = INTRINSICS_FROM_500;
+    version = INTRINSICS_FROM_600;
+    version = INTRINSICS_FROM_700;
+    version = INTRINSICS_FROM_800;
+    version = INTRINSICS_FROM_900;
+    version = INTRINSICS_FROM_1000;
+}
 else
 {
     static assert(false, "LDC LLVM version not supported");
@@ -92,9 +102,17 @@ nothrow:
 pragma(LDC_intrinsic, "llvm.returnaddress")
     void* llvm_returnaddress(uint level);
 
+version(INTRINSICS_FROM_1000)
+{
+    private enum llvm_frameaddress_fullname = "llvm.frameaddress.p0i8";
+}
+else
+{
+    private enum llvm_frameaddress_fullname = "llvm.frameaddress";
+}
 /// The 'llvm.frameaddress' intrinsic attempts to return the target-specific
 /// frame pointer value for the specified stack frame.
-pragma(LDC_intrinsic, "llvm.frameaddress")
+pragma(LDC_intrinsic, llvm_frameaddress_fullname)
     void* llvm_frameaddress(uint level);
 
 /// The 'llvm.stacksave' intrinsic is used to remember the current state of the
@@ -410,7 +428,26 @@ pragma(LDC_intrinsic, "llvm.maxnum.f#")
     T llvm_maxnum(T)(T vala, T valb)
         if (__traits(isFloating, T));
 
+version (INTRINSICS_FROM_800)
+{
+/// The ‘llvm.minimum.*’ intrinsics return the minimum of the two arguments, propagating
+/// NaNs and treating -0.0 as less than +0.0.
+/// If either operand is a NaN, returns NaN. Otherwise returns the lesser of the two arguments.
+/// -0.0 is considered to be less than +0.0 for this intrinsic. These are the
+/// semantics specified in the draft of IEEE 754-2018.
+pragma(LDC_intrinsic, "llvm.minimum.f#")
+    T llvm_minimum(T)(T vala, T valb)
+        if (__traits(isFloating, T));
 
+/// The ‘llvm.maximum.*’ intrinsics return the maximum of the two arguments, propagating
+/// NaNs and treating -0.0 as less than +0.0.
+/// If either operand is a NaN, returns NaN. Otherwise returns the greater of the two arguments.
+/// -0.0 is considered to be less than +0.0 for this intrinsic. Note that these are the
+/// semantics specified in the draft of IEEE 754-2018.
+pragma(LDC_intrinsic, "llvm.maximum.f#")
+    T llvm_maximum(T)(T vala, T valb)
+        if (__traits(isFloating, T));
+}
 
 //
 // BIT MANIPULATION INTRINSICS
@@ -514,12 +551,21 @@ pragma(LDC_atomic_load)
 pragma(LDC_atomic_store)
     void llvm_atomic_store(T)(T val, shared T* ptr, AtomicOrdering ordering = DefaultOrdering);
 
+///
+struct CmpXchgResult(T) {
+    T previousValue; ///
+    bool exchanged; ///
+}
+
 /// Loads a value from memory at ptr and compares it to cmp.
 /// If they are equal, it stores val in memory at ptr.
-/// Returns the previous value in memory.
 /// This is all performed as single atomic operation.
 pragma(LDC_atomic_cmp_xchg)
-    T llvm_atomic_cmp_xchg(T)(shared T* ptr, T cmp, T val, AtomicOrdering ordering = DefaultOrdering);
+    CmpXchgResult!T llvm_atomic_cmp_xchg(T)(
+        shared T* ptr, T cmp, T val,
+        AtomicOrdering successOrdering = DefaultOrdering,
+        AtomicOrdering failureOrdering = DefaultOrdering,
+        bool weak = false);
 
 /// Atomically sets *ptr = val and returns the previous *ptr value.
 pragma(LDC_atomic_rmw, "xchg")
@@ -612,7 +658,51 @@ pragma(LDC_intrinsic, "llvm.umul.with.overflow.i#")
     OverflowRet!(T) llvm_umul_with_overflow(T)(T lhs, T rhs)
         if (__traits(isIntegral, T));
 
+version (INTRINSICS_FROM_800)
+{
+//
+// SATURATION ARITHMETIC INTRINSICS
+//
+// Saturation arithmetic is a version of arithmetic in which operations are
+// limited to a fixed range between a minimum and maximum value. If the result of
+// an operation is greater than the maximum value, the result is set (or
+// "clamped") to this maximum. If it is below the minimum, it is clamped to this
+// minimum.
+//
 
+/// Signed Saturation Addition
+/// The maximum value this operation can clamp to is the largest signed value
+/// representable by the bit width of the arguments. The minimum value is the
+/// smallest signed value representable by this bit width.
+pragma(LDC_intrinsic, "llvm.sadd.sat.i#")
+    T llvm_sadd_sat(T)(T lhs, T rhs)
+        if (__traits(isIntegral, T));
+
+/// Unsigned Saturation Addition
+/// The maximum value this operation can clamp to is the largest unsigned value
+/// representable by the bit width of the arguments. Because this is an unsigned
+/// operation, the result will never saturate towards zero.
+pragma(LDC_intrinsic, "llvm.uadd.sat.i#")
+    T llvm_uadd_sat(T)(T lhs, T rhs)
+        if (__traits(isIntegral, T));
+
+/// Signed Saturation Subtraction
+/// The maximum value this operation can clamp to is the largest signed value
+/// representable by the bit width of the arguments. The minimum value is the
+/// smallest signed value representable by this bit width.
+pragma(LDC_intrinsic, "llvm.ssub.sat.i#")
+    T llvm_ssub_sat(T)(T lhs, T rhs)
+        if (__traits(isIntegral, T));
+
+/// Unsigned Saturation Subtraction
+/// The minimum value this operation can clamp to is 0, which is the smallest
+/// unsigned value representable by the bit width of the unsigned arguments.
+/// Because this is an unsigned operation, the result will never saturate towards
+/// the largest possible value representable by this bit width.
+pragma(LDC_intrinsic, "llvm.usub.sat.i#")
+    T llvm_usub_sat(T)(T lhs, T rhs)
+        if (__traits(isIntegral, T));
+}
 
 //
 // GENERAL INTRINSICS
@@ -638,3 +728,12 @@ pragma(LDC_intrinsic, "llvm.debugtrap")
 pragma(LDC_intrinsic, "llvm.expect.i#")
     T llvm_expect(T)(T val, T expectedVal)
         if (__traits(isIntegral, T));
+
+version (INTRINSICS_FROM_600)
+{
+/// LLVM optimizer treats this intrinsic as having side effect, so it can be
+/// inserted into a loop to indicate that the loop shouldn't be assumed to
+/// terminate even if it's an infinite loop with no other side effect.
+pragma(LDC_intrinsic, "llvm.sideeffect")
+    void llvm_sideeffect();
+}
