@@ -20,29 +20,36 @@ template _d_cmain()
 {
     extern(C)
     {
-        // `pragma(mangle, ...)`s are necessary due to https://issues.dlang.org/show_bug.cgi?id=20012
-
-        pragma(mangle, "_d_run_main")
-        int _d_run_main(int argc, char **argv, void* mainFunc);
-
-        pragma(mangle, "_Dmain")
         int _Dmain(char[][] args);
 
-        pragma(mangle, "main")
-        int main(int argc, char **argv)
+        version (Windows)
         {
-            pragma(LDC_profile_instr, false);
-            return _d_run_main(argc, argv, &_Dmain);
-        }
+            int _d_wrun_main(int argc, wchar** wargv, void* mainFunc);
 
-        // Solaris, for unknown reasons, requires both a main() and an _main()
-        version (Solaris)
-        {
-            pragma(mangle, "_main")
-            int _main(int argc, char** argv)
+            int wmain(int argc, wchar** wargv)
             {
                 pragma(LDC_profile_instr, false);
-                return main(argc, argv);
+                return _d_wrun_main(argc, wargv, &_Dmain);
+            }
+        }
+        else
+        {
+            int _d_run_main(int argc, char** argv, void* mainFunc);
+
+            int main(int argc, char** argv)
+            {
+                pragma(LDC_profile_instr, false);
+                return _d_run_main(argc, argv, &_Dmain);
+            }
+
+            // Solaris, for unknown reasons, requires both a main() and an _main()
+            version (Solaris)
+            {
+                int _main(int argc, char** argv)
+                {
+                    pragma(LDC_profile_instr, false);
+                    return main(argc, argv);
+                }
             }
         }
     }

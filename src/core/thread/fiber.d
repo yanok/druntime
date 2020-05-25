@@ -13,6 +13,15 @@ module core.thread.fiber;
 
 import core.thread.osthread;
 
+version (OSX)
+    version = Darwin;
+else version (iOS)
+    version = Darwin;
+else version (TVOS)
+    version = Darwin;
+else version (WatchOS)
+    version = Darwin;
+
 version (LDC)
 {
     import ldc.attributes;
@@ -43,6 +52,8 @@ else
 version (Windows)
 {
     import core.stdc.stdlib : malloc, free;
+    import core.sys.windows.winbase;
+    import core.sys.windows.winnt;
 }
 
 private
@@ -508,7 +519,7 @@ private
 
 version (LDC)
 {
-    version (OSX)
+    version (Darwin)
     {
         version (ARM) version = CheckFiberMigration;
         version (AArch64) version = CheckFiberMigration;
@@ -1204,7 +1215,7 @@ private:
         //       requires too much special logic to be worthwhile.
         m_ctxt = new Thread.Context;
 
-        static if ( __traits( compiles, VirtualAlloc ) )
+        version (Windows)
         {
             // reserve memory for stack
             m_pmem = VirtualAlloc( null,
@@ -1252,14 +1263,7 @@ private:
         }
         else
         {
-            version (Posix) import core.sys.posix.sys.mman; // mmap
-            version (FreeBSD) import core.sys.freebsd.sys.mman : MAP_ANON;
-            version (NetBSD) import core.sys.netbsd.sys.mman : MAP_ANON;
-            version (OpenBSD) import core.sys.openbsd.sys.mman : MAP_ANON;
-            version (DragonFlyBSD) import core.sys.dragonflybsd.sys.mman : MAP_ANON;
-            version (CRuntime_Glibc) import core.sys.linux.sys.mman : MAP_ANON;
-            version (Darwin) import core.sys.darwin.sys.mman : MAP_ANON;
-            version (CRuntime_UClibc) import core.sys.linux.sys.mman : MAP_ANON;
+            version (Posix) import core.sys.posix.sys.mman; // mmap, MAP_ANON
 
             static if ( __traits( compiles, mmap ) )
             {
@@ -1341,7 +1345,7 @@ private:
         scope(exit) Thread.slock.unlock_nothrow();
         Thread.remove( m_ctxt );
 
-        static if ( __traits( compiles, VirtualAlloc ) )
+        version (Windows)
         {
             VirtualFree( m_pmem, 0, MEM_RELEASE );
         }
@@ -1890,6 +1894,8 @@ private:
     //
     final void switchIn() nothrow @nogc
     {
+        version (LDC) pragma(inline, false);
+
         Thread  tobj = Thread.getThis();
         void**  oldp = &tobj.m_curr.tstack;
         void*   newp = m_ctxt.tstack;
@@ -1974,6 +1980,8 @@ private:
     //
     final void switchOut() nothrow @nogc
     {
+        version (LDC) pragma(inline, false);
+
         Thread  tobj = m_curThread;
         void**  oldp = &m_ctxt.tstack;
         void*   newp = tobj.m_curr.within.tstack;
@@ -2074,7 +2082,7 @@ unittest {
     assert( composed.state == Fiber.State.TERM );
 }
 
-version (unittest)
+version (CoreUnittest)
 {
     class TestFiber : Fiber
     {

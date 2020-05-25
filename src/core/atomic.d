@@ -675,6 +675,13 @@ else version (D_InlineAsm_X86_64)
     enum has64BitCAS = true;
     enum has128BitCAS = true;
 }
+else version (GNU)
+{
+    import gcc.config;
+    enum has64BitCAS = GNU_Have_64Bit_Atomics;
+    enum has64BitXCHG = GNU_Have_64Bit_Atomics;
+    enum has128BitCAS = GNU_Have_LibAtomic;
+}
 else
 {
     enum has64BitXCHG = false;
@@ -882,7 +889,7 @@ private
 ////////////////////////////////////////////////////////////////////////////////
 
 
-version (unittest)
+version (CoreUnittest)
 {
     void testXCHG(T)(T val) pure nothrow @nogc @trusted
     in
@@ -1080,6 +1087,16 @@ version (unittest)
             assert(head.gen == 1);
             assert(cast(size_t)head.next == 1);
         }
+
+        // https://issues.dlang.org/show_bug.cgi?id=20629
+        static struct Struct
+        {
+            uint a, b;
+        }
+        shared Struct s1 = Struct(1, 2);
+        atomicStore(s1, Struct(3, 4));
+        assert(cast(uint) s1.a == 3);
+        assert(cast(uint) s1.b == 4);
     }
 
     @betterC pure nothrow unittest
