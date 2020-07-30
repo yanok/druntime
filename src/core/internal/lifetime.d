@@ -110,6 +110,42 @@ void emplaceInitializer(T)(scope ref T chunk) nothrow pure @trusted
     }
     else
     {
+version(WEKA)
+{
+        version(all)
+        {
+            // Avoid stack allocation, at the cost of virtual call to get the init symbol.
+            auto init = cast(ubyte[])typeid(T).initializer();
+            // arr.ptr is only null in the case of zero initializer, which is handled above.
+
+            import core.stdc.string : memcpy;
+            static if (__traits(isStaticArray, T))
+            {
+                // Static array initializer only contains initialization
+                // for one element of the static array.
+                auto elemp = cast(void *) &chunk;
+                auto endp = elemp + T.sizeof;
+                while (elemp < endp)
+                {
+                    memcpy(elemp, init.ptr, init.length);
+                    elemp += init.length;
+                }
+            }
+            else
+            {
+                memcpy(&chunk, init.ptr, T.sizeof);
+            }
+        }
+        else
+        {
+            // Avoid stack allocation, at the cost of duplicating the init symbol (binary size increase)
+            import core.stdc.string : memcpy;
+            shared static immutable T init = T.init;
+            memcpy(&chunk, &init, T.sizeof);
+        }
+}
+else
+{
         // emplace T.init (an rvalue) without extra variable (and according destruction)
         alias RawBytes = void[T.sizeof];
 
@@ -120,6 +156,7 @@ void emplaceInitializer(T)(scope ref T chunk) nothrow pure @trusted
         }
 
         *cast(RawBytes*) &chunk = U.init.data;
+}
     }
 }
 
