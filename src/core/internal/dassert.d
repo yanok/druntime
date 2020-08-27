@@ -4,8 +4,16 @@ on assertion failures
 */
 module core.internal.dassert;
 
-/// Allows customized assert error messages
-string _d_assert_fail(string comp, A, B)(auto ref const A a, auto ref const B b)
+/// Allows customized assert error messages for unary expressions
+string _d_assert_fail(string op, A)(auto ref const scope A a)
+{
+    string val = miniFormatFakeAttributes(a);
+    enum token = op == "!" ? "==" : "!=";
+    return combine(val, token, "true");
+}
+
+/// Allows customized assert error messages for binary expressions
+string _d_assert_fail(string comp, A, B)(auto ref const scope A a, auto ref const scope B b)
 {
     /*
     The program will be terminated after the assertion error message has
@@ -70,7 +78,7 @@ private template getPrintfFormat(T)
 Minimalistic formatting for use in _d_assert_fail to keep the compilation
 overhead small and avoid the use of Phobos.
 */
-private string miniFormat(V)(const ref V v)
+private string miniFormat(V)(const scope ref V v)
 {
     import core.internal.traits: isAggregateType;
     import core.stdc.stdio : sprintf;
@@ -95,15 +103,62 @@ private string miniFormat(V)(const ref V v)
     }
     else static if (__traits(isIntegral, V))
     {
-        enum printfFormat = getPrintfFormat!V;
-        char[20] val;
-        const len = sprintf(&val[0], printfFormat, v);
-        return val.idup[0 .. len];
+        static if (is(V == char))
+        {
+            // Avoid invalid code points
+            if (v < 0x7F)
+                return ['\'', v, '\''];
+
+            uint tmp = v;
+            return "cast(char) " ~ miniFormat(tmp);
+        }
+        else static if (is(V == wchar) || is(V == dchar))
+        {
+            import core.internal.utf: isValidDchar, toUTF8;
+
+            // Avoid invalid code points
+            if (isValidDchar(v))
+                return toUTF8(['\'', v, '\'']);
+
+            uint tmp = v;
+            return "cast(" ~ V.stringof ~ ") " ~ miniFormat(tmp);
+        }
+        else
+        {
+            enum printfFormat = getPrintfFormat!V;
+            char[20] val;
+            const len = sprintf(&val[0], printfFormat, v);
+            return val.idup[0 .. len];
+        }
     }
     else static if (__traits(isFloating, V))
     {
+        version (LDC)
+            alias LD = real;
+        else
+            import core.stdc.config : LD = c_long_double;
+
         char[60] val;
-        const len = sprintf(&val[0], "%g", v);
+        int len;
+        static if (is(V == float) || is(V == double))
+            len = sprintf(&val[0], "%g", v);
+        else static if (is(V == real))
+            len = sprintf(&val[0], "%Lg", cast(LD) v);
+        else static if (is(V == cfloat) || is(V == cdouble))
+            len = sprintf(&val[0], "%g + %gi", v.re, v.im);
+        else static if (is(V == creal))
+            len = sprintf(&val[0], "%Lg + %Lgi", cast(LD) v.re, cast(LD) v.im);
+        else static if (is(V == ifloat) || is(V == idouble))
+            len = sprintf(&val[0], "%gi", v);
+        else // ireal
+        {
+            static assert(is(V == ireal));
+            static if (is(LD == real))
+                alias R = ireal;
+            else
+                alias R = idouble;
+            len = sprintf(&val[0], "%Lgi", cast(R) v);
+        }
         return val.idup[0 .. len];
     }
     // special-handling for void-arrays
@@ -111,11 +166,19 @@ private string miniFormat(V)(const ref V v)
     {
         return "`null`";
     }
+    else static if (is(V == U*, U))
+    {
+        // Format as ulong because not all sprintf implementations
+        // prepend a 0x for pointers
+        char[20] val;
+        const len = sprintf(&val[0], "0x%llX", cast(ulong) v);
+        return val.idup[0 .. len];
+    }
     // toString() isn't always const, e.g. classes inheriting from Object
     else static if (__traits(compiles, { string s = V.init.toString(); }))
     {
         // Object references / struct pointers may be null
-        static if (is(V == class) || is(V == interface) || is(V == U*, U))
+        static if (is(V == class) || is(V == interface))
         {
             if (v is null)
                 return "`null`";
@@ -254,7 +317,7 @@ private auto assumeFakeAttributes(T)(T t) @trusted
     return cast(type) t;
 }
 
-private string miniFormatFakeAttributes(T)(const ref T t)
+private string miniFormatFakeAttributes(T)(const scope ref T t)
 {
     alias miniT = miniFormat!T;
     return assumeFakeAttributes(&miniT)(t);

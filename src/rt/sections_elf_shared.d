@@ -57,6 +57,11 @@ else version (Darwin)
     import core.sys.darwin.mach.dyld;
     import core.sys.darwin.mach.getsect;
 
+    version (D_LP64)
+        import rt.sections_darwin_64 : getTLSRange, foreachDataSection, getSection;
+    else
+        static assert(0, "Not implemented for this architecture");
+
     extern(C) intptr_t _dyld_get_image_slide(const mach_header*) nothrow @nogc;
 }
 else version (NetBSD)
@@ -116,7 +121,8 @@ struct DSO
         return _moduleGroup;
     }
 
-    version (DigitalMars) @property immutable(FuncTable)[] ehTables() const nothrow @nogc
+    version (DigitalMars)
+    @property immutable(FuncTable)[] ehTables() const nothrow @nogc
     {
         return null;
     }
@@ -448,7 +454,7 @@ T[] toRange(T)(T* beg, T* end) { return beg[0 .. end - beg]; }
  */
 extern(C) void _d_dso_registry(void* arg)
 {
-    auto data = cast(CompilerDSOData*)arg;
+    auto data = cast(CompilerDSOData*) arg;
 
     // only one supported currently
     safeAssert(data._version >= 1, "Incompatible compiler-generated DSO data version.");
@@ -878,23 +884,15 @@ static if (SharedELF) void scanSegments(const scope ref SharedObject object, DSO
 }
 else static if (SharedDarwin) void scanSegments(mach_header* info, DSO* pdso)
 {
-    import rt.mach_utils;
-
     immutable slide = _dyld_get_image_slide(info);
-    foreach (e; dataSections)
-    {
-        auto sect = getSection(info, slide, e.seg, e.sect);
-        if (sect != null)
-            pdso._gcRanges.insertBack((cast(void*)sect.ptr)[0 .. sect.length]);
-    }
+    foreachDataSection(info, slide, (sectionData) { pdso._gcRanges.insertBack(sectionData); });
 
     version (Shared)
     {
-        auto text = getSection(info, slide, "__TEXT", "__text");
-        if (!text) {
+        void[] text = getSection(info, slide, "__TEXT", "__text");
+        if (!text)
             assert(0, "Failed to get text section.");
-        }
-        pdso._codeSegments.insertBack(cast(void[])text);
+        pdso._codeSegments.insertBack(text);
     }
 }
 
@@ -973,11 +971,6 @@ static if (SharedDarwin)
         // to 16-bytes, section __thread_data will be aligned as a workaround
         // for https://github.com/ldc-developers/ldc/issues/1252
     }
-
-    version (D_LP64)
-        import rt.sections_darwin_64 : getTLSRange;
-    else
-        static assert(0, "Not implemented for this architecture");
 }
 else
 {
@@ -1076,4 +1069,4 @@ void[] getTLSRange(size_t mod, size_t sz) nothrow @nogc
     }
 }
 
-} // !OSX
+} // !SharedDarwin

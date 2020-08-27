@@ -663,14 +663,12 @@ version (LDC)
 }
 else version (D_InlineAsm_X86)
 {
-    version = AsmX86;
     enum has64BitXCHG = false;
     enum has64BitCAS = true;
     enum has128BitCAS = false;
 }
 else version (D_InlineAsm_X86_64)
 {
-    version = AsmX86;
     enum has64BitXCHG = true;
     enum has64BitCAS = true;
     enum has128BitCAS = true;
@@ -691,36 +689,32 @@ else
 
 private
 {
-    version (AsmX86)
+    bool atomicValueIsProperlyAligned(T)(ref T val) pure nothrow @nogc @trusted
+    {
+        return atomicPtrIsProperlyAligned(&val);
+    }
+
+    bool atomicPtrIsProperlyAligned(T)(T* ptr) pure nothrow @nogc @safe
     {
         // NOTE: Strictly speaking, the x86 supports atomic operations on
         //       unaligned values.  However, this is far slower than the
         //       common case, so such behavior should be prohibited.
-        bool atomicValueIsProperlyAligned(T)(ref T val) pure nothrow @nogc @trusted
+        static if (T.sizeof > size_t.sizeof)
         {
-            return atomicPtrIsProperlyAligned(&val);
-        }
-
-        bool atomicPtrIsProperlyAligned(T)(T* ptr) pure nothrow @nogc @safe
-        {
-            // NOTE: 32 bit x86 systems support 8 byte CAS, which only requires
-            //       4 byte alignment, so use size_t as the align type here.
-            static if (T.sizeof > size_t.sizeof)
+            version (X86)
+            {
+                // cmpxchg8b only requires 4-bytes alignment
                 return cast(size_t)ptr % size_t.sizeof == 0;
+            }
             else
+            {
+                // e.g., x86_64 cmpxchg16b requires 16-bytes alignment
                 return cast(size_t)ptr % T.sizeof == 0;
+            }
         }
-    }
-    else
-    {
-        bool atomicValueIsProperlyAligned(T)(ref T val) pure nothrow @nogc @trusted
+        else
         {
-            return true;
-        }
-
-        bool atomicPtrIsProperlyAligned(T)(T*) pure nothrow @nogc @safe
-        {
-            return true;
+            return cast(size_t)ptr % T.sizeof == 0;
         }
     }
 
@@ -757,7 +751,10 @@ private
     {
         import core.internal.traits : hasElaborateAssign;
 
-        static assert (S.sizeof <= size_t*2 && (S.sizeof & (S.sizeof - 1)) == 0, S.stringof ~ " has invalid size for atomic operations.");
+        // `(x & (x-1)) == 0` checks that x is a power of 2.
+        static assert (S.sizeof <= size_t.sizeof * 2
+            && (S.sizeof & (S.sizeof - 1)) == 0,
+            S.stringof ~ " has invalid size for atomic operations.");
         static assert (!hasElaborateAssign!S, S.stringof ~ " may not have an elaborate assignment when used with atomic operations.");
 
         enum ValidateStruct = true;
@@ -891,6 +888,15 @@ private
 
 version (CoreUnittest)
 {
+    version (D_LP64)
+    {
+        enum hasDWCAS = has128BitCAS;
+    }
+    else
+    {
+        enum hasDWCAS = has64BitCAS;
+    }
+
     void testXCHG(T)(T val) pure nothrow @nogc @trusted
     in
     {
@@ -1038,14 +1044,14 @@ version (CoreUnittest)
         assert(i == 0);
 
         shared float f = 0.1f;
-        atomicOp!"+="( f, 0.1f );
-        assert( f > 0.1999f && f < 0.2001f );
+        atomicOp!"+="(f, 0.1f);
+        assert(f > 0.1999f && f < 0.2001f);
 
-        static if ( has64BitCAS )
+        static if (has64BitCAS)
         {
             shared double d = 0.1;
-            atomicOp!"+="( d, 0.1 );
-            assert( d > 0.1999 && d < 0.2001 );
+            atomicOp!"+="(d, 0.1);
+            assert(d > 0.1999 && d < 0.2001);
         }
     }
 
@@ -1070,15 +1076,6 @@ version (CoreUnittest)
             assert(b.value1 == 3 && b.value2 ==4);
         }
 
-        version (D_LP64)
-        {
-            enum hasDWCAS = has128BitCAS;
-        }
-        else
-        {
-            enum hasDWCAS = has64BitCAS;
-        }
-
         static if (hasDWCAS)
         {
             static struct List { size_t gen; List* next; }
@@ -1097,6 +1094,28 @@ version (CoreUnittest)
         atomicStore(s1, Struct(3, 4));
         assert(cast(uint) s1.a == 3);
         assert(cast(uint) s1.b == 4);
+    }
+
+    // https://issues.dlang.org/show_bug.cgi?id=20844
+    static if (hasDWCAS)
+    {
+        debug: // tests CAS in-contract
+
+        pure nothrow unittest
+        {
+            import core.exception : AssertError;
+
+            align(16) shared ubyte[2 * size_t.sizeof + 1] data;
+            auto misalignedPointer = cast(size_t[2]*) &data[1];
+            size_t[2] x;
+
+            try
+                cas(misalignedPointer, x, x);
+            catch (AssertError)
+                return;
+
+            assert(0, "should have failed");
+        }
     }
 
     @betterC pure nothrow unittest

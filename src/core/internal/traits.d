@@ -466,6 +466,26 @@ template Filter(alias pred, TList...)
         else
             alias Filter = AliasSeq!();
     }
+    /* The next case speeds up compilation by reducing
+     * the number of Filter instantiations
+     */
+    else static if (TList.length == 2)
+    {
+        static if (pred!(TList[0]))
+        {
+            static if (pred!(TList[1]))
+                alias Filter = AliasSeq!(TList[0], TList[1]);
+            else
+                alias Filter = AliasSeq!(TList[0]);
+        }
+        else
+        {
+            static if (pred!(TList[1]))
+                alias Filter = AliasSeq!(TList[1]);
+            else
+                alias Filter = AliasSeq!();
+        }
+    }
     else
     {
         alias Filter =
@@ -485,6 +505,37 @@ template staticMap(alias F, T...)
     else static if (T.length == 1)
     {
         alias staticMap = AliasSeq!(F!(T[0]));
+    }
+    /* Cases 2 to 8 improve compile performance by reducing
+     * the number of recursive instantiations of staticMap
+     */
+    else static if (T.length == 2)
+    {
+        alias staticMap = AliasSeq!(F!(T[0]), F!(T[1]));
+    }
+    else static if (T.length == 3)
+    {
+        alias staticMap = AliasSeq!(F!(T[0]), F!(T[1]), F!(T[2]));
+    }
+    else static if (T.length == 4)
+    {
+        alias staticMap = AliasSeq!(F!(T[0]), F!(T[1]), F!(T[2]), F!(T[3]));
+    }
+    else static if (T.length == 5)
+    {
+        alias staticMap = AliasSeq!(F!(T[0]), F!(T[1]), F!(T[2]), F!(T[3]), F!(T[4]));
+    }
+    else static if (T.length == 6)
+    {
+        alias staticMap = AliasSeq!(F!(T[0]), F!(T[1]), F!(T[2]), F!(T[3]), F!(T[4]), F!(T[5]));
+    }
+    else static if (T.length == 7)
+    {
+        alias staticMap = AliasSeq!(F!(T[0]), F!(T[1]), F!(T[2]), F!(T[3]), F!(T[4]), F!(T[5]), F!(T[6]));
+    }
+    else static if (T.length == 8)
+    {
+        alias staticMap = AliasSeq!(F!(T[0]), F!(T[1]), F!(T[2]), F!(T[3]), F!(T[4]), F!(T[5]), F!(T[6]), F!(T[7]));
     }
     else
     {
@@ -715,4 +766,61 @@ if (func.length == 1 /*&& isCallable!func*/)
     alias P_dglit = Parameters!((int a){});
     static assert(P_dglit.length == 1);
     static assert(is(P_dglit[0] == int));
+}
+
+// Return `true` if `Type` has `member` that evaluates to `true` in a static if condition
+enum isTrue(Type, string member) = __traits(compiles, { static if (__traits(getMember, Type, member)) {} else static assert(0); });
+
+unittest
+{
+    static struct T
+    {
+        enum a = true;
+        enum b = false;
+        enum c = 1;
+        enum d = 45;
+        enum e = "true";
+        enum f = "";
+        enum g = null;
+        alias h = bool;
+    }
+
+    static assert( isTrue!(T, "a"));
+    static assert(!isTrue!(T, "b"));
+    static assert( isTrue!(T, "c"));
+    static assert( isTrue!(T, "d"));
+    static assert( isTrue!(T, "e"));
+    static assert( isTrue!(T, "f"));
+    static assert(!isTrue!(T, "g"));
+    static assert(!isTrue!(T, "h"));
+}
+
+template hasUDA(alias symbol, alias attribute)
+{
+    alias attrs = __traits(getAttributes, symbol);
+
+    static foreach (a; attrs)
+    {
+        static if (is(a == attribute))
+        {
+            enum hasUDA = true;
+        }
+    }
+
+    static if (!__traits(compiles, (hasUDA == true)))
+        enum hasUDA = false;
+}
+
+unittest
+{
+    struct SomeUDA{}
+
+    struct Test
+    {
+        int woUDA;
+        @SomeUDA int withUDA;
+    }
+
+    static assert(hasUDA!(Test.withUDA, SomeUDA));
+    static assert(!hasUDA!(Test.woUDA, SomeUDA));
 }

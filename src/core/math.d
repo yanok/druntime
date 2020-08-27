@@ -1,4 +1,4 @@
-﻿// Written in the D programming language.
+// Written in the D programming language.
 
 /**
  * Builtin mathematical intrinsics
@@ -27,13 +27,25 @@ module core.math;
 
 version (LDC)
 {
-    import stdc = core.stdc.math;
     import ldc.intrinsics;
+
+    private enum isRealX87 = (real.mant_dig == 64);
 }
 
 public:
 @nogc:
+nothrow:
+@safe:
 
+/*****************************************
+ * Returns x rounded to a long value using the FE_TONEAREST rounding mode.
+ * If the integer value of x is
+ * greater than long.max, the result is
+ * indeterminate.
+ */
+extern (C) real rndtonl(real x);
+
+pure:
 /***********************************
  * Returns cosine of x. x is in radians.
  *
@@ -47,9 +59,17 @@ public:
  */
 
 version (LDC)
+{
+    alias cos = llvm_cos!float;
+    alias cos = llvm_cos!double;
     alias cos = llvm_cos!real;
+}
 else
-real cos(real x) @safe pure nothrow;       /* intrinsic */
+{
+    float cos(float x);     /* intrinsic */
+    double cos(double x);   /* intrinsic */ /// ditto
+    real cos(real x);       /* intrinsic */ /// ditto
+}
 
 /***********************************
  * Returns sine of x. x is in radians.
@@ -65,9 +85,17 @@ real cos(real x) @safe pure nothrow;       /* intrinsic */
  */
 
 version (LDC)
+{
+    alias sin = llvm_sin!float;
+    alias sin = llvm_sin!double;
     alias sin = llvm_sin!real;
+}
 else
-real sin(real x) @safe pure nothrow;       /* intrinsic */
+{
+    float sin(float x);     /* intrinsic */
+    double sin(double x);   /* intrinsic */ /// ditto
+    real sin(real x);       /* intrinsic */ /// ditto
+}
 
 /*****************************************
  * Returns x rounded to a long value using the current rounding mode.
@@ -75,19 +103,26 @@ real sin(real x) @safe pure nothrow;       /* intrinsic */
  * greater than long.max, the result is
  * indeterminate.
  */
+
 version (LDC)
-    alias rndtol = stdc.llroundl;
+{
+    private extern(C)
+    {
+        long llroundf(float x);
+        long llround(double x);
+        long llroundl(real x);
+    }
+
+    alias rndtol = llroundf;
+    alias rndtol = llround;
+    alias rndtol = llroundl;
+}
 else
-long rndtol(real x) @safe pure nothrow;    /* intrinsic */
-
-
-/*****************************************
- * Returns x rounded to a long value using the FE_TONEAREST rounding mode.
- * If the integer value of x is
- * greater than long.max, the result is
- * indeterminate.
- */
-extern (C) real rndtonl(real x);
+{
+    long rndtol(float x);   /* intrinsic */
+    long rndtol(double x);  /* intrinsic */ /// ditto
+    long rndtol(real x);    /* intrinsic */ /// ditto
+}
 
 /***************************************
  * Compute square root of x.
@@ -100,22 +135,21 @@ extern (C) real rndtonl(real x);
  *      )
  */
 
-@safe pure nothrow
+version (LDC)
 {
-  version (LDC)
-  {
+    pragma(inline, true):
+
     // http://llvm.org/docs/LangRef.html#llvm-sqrt-intrinsic
     // sqrt(x) when x is less than zero is undefined
     float  sqrt(float  x) { return x < 0 ? float.nan  : llvm_sqrt(x); }
     double sqrt(double x) { return x < 0 ? double.nan : llvm_sqrt(x); }
     real   sqrt(real   x) { return x < 0 ? real.nan   : llvm_sqrt(x); }
-  }
-  else
-  {
+}
+else
+{
     float sqrt(float x);    /* intrinsic */
     double sqrt(double x);  /* intrinsic */ /// ditto
     real sqrt(real x);      /* intrinsic */ /// ditto
-  }
 }
 
 /*******************************************
@@ -125,74 +159,227 @@ extern (C) real rndtonl(real x);
 
 version (LDC)
 {
-    version (MinGW)
+    pragma(inline, true):
+
+    // Implementation from libmir:
+    // https://github.com/libmir/mir-core/blob/master/source/mir/math/ieee.d
+    private T ldexpImpl(T)(const T n, int exp) @trusted pure nothrow
     {
-        real ldexp(real n, int exp) @safe pure nothrow
+        enum RealFormat { ieeeSingle, ieeeDouble, ieeeExtended, ieeeQuadruple }
+
+             static if (T.mant_dig ==  24) enum realFormat = RealFormat.ieeeSingle;
+        else static if (T.mant_dig ==  53) enum realFormat = RealFormat.ieeeDouble;
+        else static if (T.mant_dig ==  64) enum realFormat = RealFormat.ieeeExtended;
+        else static if (T.mant_dig == 113) enum realFormat = RealFormat.ieeeQuadruple;
+        else static assert(false, "Unsupported format for " ~ T.stringof);
+
+        version (LittleEndian)
         {
-            // The MinGW runtime only provides a double precision ldexp, and
-            // it doesn't seem to reliably possible to express the fscale
-            // semantics (two FP stack inputs/returns) in an inline asm
-            // expression clobber list.
-            version (D_InlineAsm_X86_64)
+            enum MANTISSA_LSB = 0;
+            enum MANTISSA_MSB = 1;
+        }
+        else
+        {
+            enum MANTISSA_LSB = 1;
+            enum MANTISSA_MSB = 0;
+        }
+
+        static if (realFormat == RealFormat.ieeeExtended)
+        {
+            alias S = int;
+            alias U = ushort;
+            enum sig_mask = U(1) << (U.sizeof * 8 - 1);
+            enum exp_shft = 0;
+            enum man_mask = 0;
+            version (LittleEndian)
+                enum idx = 4;
+            else
+                enum idx = 0;
+        }
+        else
+        {
+            static if (realFormat == RealFormat.ieeeQuadruple || realFormat == RealFormat.ieeeDouble && double.sizeof == size_t.sizeof)
             {
-                asm @trusted pure nothrow
-                {
-                    naked;
-                    push RCX;                // push exp (8 bytes), passed in ECX
-                    fild int ptr [RSP];      // push exp onto FPU stack
-                    pop RCX;                 // return stack to initial state
-                    fld real ptr [RDX];      // push n   onto FPU stack, passed in [RDX]
-                    fscale;                  // ST(0) = ST(0) * 2^ST(1)
-                    fstp ST(1);              // pop stack maintaining top value => function return value
-                    ret;                     // no arguments passed via stack
-                }
+                alias S = long;
+                alias U = ulong;
             }
             else
             {
-                asm @trusted pure nothrow
+                alias S = int;
+                alias U = uint;
+            }
+            static if (realFormat == RealFormat.ieeeQuadruple)
+                alias M = ulong;
+            else
+                alias M = U;
+            enum sig_mask = U(1) << (U.sizeof * 8 - 1);
+            enum uint exp_shft = T.mant_dig - 1 - (T.sizeof > U.sizeof ? U.sizeof * 8 : 0);
+            enum man_mask = (U(1) << exp_shft) - 1;
+            enum idx = T.sizeof > U.sizeof ? MANTISSA_MSB : 0;
+        }
+        enum exp_mask = (U.max >> (exp_shft + 1)) << exp_shft;
+        enum int exp_msh = exp_mask >> exp_shft;
+        enum intPartMask = man_mask + 1;
+
+        import core.checkedint : adds;
+        alias _expect = llvm_expect;
+
+        enum norm_factor = 1 / T.epsilon;
+        T vf = n;
+
+        auto u = (cast(U*)&vf)[idx];
+        int e = (u & exp_mask) >> exp_shft;
+        if (_expect(e != exp_msh, true))
+        {
+            if (_expect(e == 0, false)) // subnormals input
+            {
+                bool overflow;
+                vf *= norm_factor;
+                u = (cast(U*)&vf)[idx];
+                e = int((u & exp_mask) >> exp_shft) - (T.mant_dig - 1);
+            }
+            bool overflow;
+            exp = adds(exp, e, overflow);
+            if (_expect(overflow || exp >= exp_msh, false)) // infs
+            {
+                static if (realFormat == RealFormat.ieeeExtended)
                 {
-                    naked;
-                    push EAX;
-                    fild int ptr [ESP];
-                    fld real ptr [ESP+8];
-                    fscale;
-                    fstp ST(1);
-                    pop EAX;
-                    ret 12;
+                    return vf * T.infinity;
+                }
+                else
+                {
+                    u &= sig_mask;
+                    u ^= exp_mask;
+                    static if (realFormat == RealFormat.ieeeExtended)
+                    {
+                        version (LittleEndian)
+                            auto mp = cast(ulong*)&vf;
+                        else
+                            auto mp = cast(ulong*)((cast(ushort*)&vf) + 1);
+                        *mp = 0;
+                    }
+                    else
+                    static if (T.sizeof > U.sizeof)
+                    {
+                        (cast(U*)&vf)[MANTISSA_LSB] = 0;
+                    }
                 }
             }
+            else
+            if (_expect(exp > 0, true)) // normal
+            {
+                u = cast(U)((u & ~exp_mask) ^ (cast(typeof(U.init + 0))exp << exp_shft));
+            }
+            else // subnormal output
+            {
+                exp = 1 - exp;
+                static if (realFormat != RealFormat.ieeeExtended)
+                {
+                    auto m = u & man_mask;
+                    if (exp > T.mant_dig)
+                    {
+                        exp = T.mant_dig;
+                        static if (T.sizeof > U.sizeof)
+                            (cast(U*)&vf)[MANTISSA_LSB] = 0;
+                    }
+                }
+                u &= sig_mask;
+                static if (realFormat == RealFormat.ieeeExtended)
+                {
+                    version (LittleEndian)
+                        auto mp = cast(ulong*)&vf;
+                    else
+                        auto mp = cast(ulong*)((cast(ushort*)&vf) + 1);
+                    if (exp >= ulong.sizeof * 8)
+                        *mp = 0;
+                    else
+                        *mp >>>= exp;
+                }
+                else
+                {
+                    m ^= intPartMask;
+                    static if (T.sizeof > U.sizeof)
+                    {
+                        int exp2 = exp - int(U.sizeof) * 8;
+                        if (exp2 < 0)
+                        {
+                            (cast(U*)&vf)[MANTISSA_LSB] = ((cast(U*)&vf)[MANTISSA_LSB] >> exp) ^ (m << (U.sizeof * 8 - exp));
+                            m >>>= exp;
+                            u ^= cast(U) m;
+                        }
+                        else
+                        {
+                            exp = exp2;
+                            (cast(U*)&vf)[MANTISSA_LSB] = (exp < U.sizeof * 8) ? m >> exp : 0;
+                        }
+                    }
+                    else
+                    {
+                        m >>>= exp;
+                        u ^= cast(U) m;
+                    }
+                }
+            }
+            (cast(U*)&vf)[idx] = u;
+        }
+        return vf;
+    }
+
+    float  ldexp(float  n, int exp) { return ldexpImpl(n, exp); }
+    double ldexp(double n, int exp) { return ldexpImpl(n, exp); }
+    static if (isRealX87)
+    {
+        // Roughly 20% faster than ldexpImpl() on an i5-3550 CPU.
+        real ldexp(real n, int exp)
+        {
+            real r = void;
+            asm @safe pure nothrow @nogc
+            {
+                `fildl  %1       # push exp
+                 fxch   %%st(1)  # swap ST(0) and ST(1)
+                 fscale          # ST(0) := ST(0) * (2 ^^ ST(1))
+                 fstp   %%st(1)  # pop and keep ST(0) value on top`
+                : "=st" (r)
+                : "m" (exp), "st" (n)
+                : "flags"; // might clobber x87 flags
+            }
+            return r;
         }
     }
-    else // !MinGW
+    else
     {
-        alias ldexp = stdc.ldexpl;
+        real ldexp(real n, int exp) { return ldexpImpl(n, exp); }
     }
 }
 else
-real ldexp(real n, int exp) @safe pure nothrow;    /* intrinsic */
+{
+    float ldexp(float n, int exp);   /* intrinsic */
+    double ldexp(double n, int exp); /* intrinsic */ /// ditto
+    real ldexp(real n, int exp);     /* intrinsic */ /// ditto
+}
 
 unittest {
     static if (real.mant_dig == 113)
     {
-        assert(ldexp(1, -16384) == 0x1p-16384L);
-        assert(ldexp(1, -16382) == 0x1p-16382L);
+        assert(ldexp(1.0L, -16384) == 0x1p-16384L);
+        assert(ldexp(1.0L, -16382) == 0x1p-16382L);
     }
     else static if (real.mant_dig == 106)
     {
-        assert(ldexp(1,  1023) == 0x1p1023L);
-        assert(ldexp(1, -1022) == 0x1p-1022L);
-        assert(ldexp(1, -1021) == 0x1p-1021L);
+        assert(ldexp(1.0L,  1023) == 0x1p1023L);
+        assert(ldexp(1.0L, -1022) == 0x1p-1022L);
+        assert(ldexp(1.0L, -1021) == 0x1p-1021L);
     }
     else static if (real.mant_dig == 64)
     {
-        assert(ldexp(1, -16384) == 0x1p-16384L);
-        assert(ldexp(1, -16382) == 0x1p-16382L);
+        assert(ldexp(1.0L, -16384) == 0x1p-16384L);
+        assert(ldexp(1.0L, -16382) == 0x1p-16382L);
     }
     else static if (real.mant_dig == 53)
     {
-        assert(ldexp(1,  1023) == 0x1p1023L);
-        assert(ldexp(1, -1022) == 0x1p-1022L);
-        assert(ldexp(1, -1021) == 0x1p-1021L);
+        assert(ldexp(1.0L,  1023) == 0x1p1023L);
+        assert(ldexp(1.0L, -1022) == 0x1p-1022L);
+        assert(ldexp(1.0L, -1021) == 0x1p-1021L);
     }
     else
         assert(false, "Only 128bit, 80bit and 64bit reals expected here");
@@ -208,9 +395,17 @@ unittest {
  *      )
  */
 version (LDC)
+{
+    alias fabs = llvm_fabs!float;
+    alias fabs = llvm_fabs!double;
     alias fabs = llvm_fabs!real;
+}
 else
-real fabs(real x) @safe pure nothrow;      /* intrinsic */
+{
+    float fabs(float x);    /* intrinsic */
+    double fabs(double x);  /* intrinsic */ /// ditto
+    real fabs(real x);      /* intrinsic */ /// ditto
+}
 
 /**********************************
  * Rounds x to the nearest integer value, using the current rounding
@@ -221,9 +416,17 @@ real fabs(real x) @safe pure nothrow;      /* intrinsic */
  * the same operation, but does not set the FE_INEXACT exception.
  */
 version (LDC)
+{
+    alias rint = llvm_rint!float;
+    alias rint = llvm_rint!double;
     alias rint = llvm_rint!real;
+}
 else
-real rint(real x) @safe pure nothrow;      /* intrinsic */
+{
+    float rint(float x);    /* intrinsic */
+    double rint(double x);  /* intrinsic */ /// ditto
+    real rint(real x);      /* intrinsic */ /// ditto
+}
 
 /***********************************
  * Building block functions, they
@@ -232,52 +435,56 @@ real rint(real x) @safe pure nothrow;      /* intrinsic */
 
 version (LDC)
 {
-    version (X86)    version = X86_Any;
-    version (X86_64) version = X86_Any;
-
-    version (X86_Any)
+    static if (isRealX87)
     {
-        static if (real.mant_dig == 64)
-        {
-            // y * log2(x)
-            real yl2x(real x, real y)   @safe pure nothrow
-            {
-                real r;
-                asm @safe pure nothrow @nogc { "fyl2x" : "=st" (r) : "st" (x), "st(1)" (y) : "st(1)"; }
-                return r;
-            }
+        pragma(inline, true):
 
-            // y * log2(x + 1)
-            real yl2xp1(real x, real y) @safe pure nothrow
-            {
-                real r;
-                asm @safe pure nothrow @nogc { "fyl2xp1" : "=st" (r) : "st" (x), "st(1)" (y) : "st(1)"; }
-                return r;
-            }
+        // y * log2(x)
+        real yl2x(real x, real y)
+        {
+            real r = void;
+            asm @safe pure nothrow @nogc { "fyl2x" : "=st" (r) : "st(1)" (y), "st" (x) : "st(1)", "flags"; }
+            return r;
+        }
+
+        // y * log2(x + 1)
+        real yl2xp1(real x, real y)
+        {
+            real r = void;
+            asm @safe pure nothrow @nogc { "fyl2xp1" : "=st" (r) : "st(1)" (y), "st" (x) : "st(1)", "flags"; }
+            return r;
         }
     }
 }
 else
 {
-real yl2x(real x, real y)   @safe pure nothrow;       // y * log2(x)
-real yl2xp1(real x, real y) @safe pure nothrow;       // y * log2(x + 1)
+    // y * log2(x)
+    float yl2x(float x, float y);    /* intrinsic */
+    double yl2x(double x, double y);  /* intrinsic */ /// ditto
+    real yl2x(real x, real y);      /* intrinsic */ /// ditto
+    // y * log2(x +1)
+    float yl2xp1(float x, float y);    /* intrinsic */
+    double yl2xp1(double x, double y);  /* intrinsic */ /// ditto
+    real yl2xp1(real x, real y);      /* intrinsic */ /// ditto
 }
 
 unittest
 {
     version (INLINE_YL2X)
     {
-        assert(yl2x(1024, 1) == 10);
-        assert(yl2xp1(1023, 1) == 10);
+        assert(yl2x(1024.0L, 1) == 10);
+        assert(yl2xp1(1023.0L, 1) == 10);
     }
 }
 
 /*************************************
  * Round argument to a specific precision.
  *
- * D language types specify a minimum precision, not a maximum. The
- * `toPrec()` function forces rounding of the argument `f` to the
- * precision of the specified floating point type `T`.
+ * D language types specify only a minimum precision, not a maximum. The
+ * `toPrec()` function forces rounding of the argument `f` to the precision
+ * of the specified floating point type `T`.
+ * The rounding mode used is inevitably target-dependent, but will be done in
+ * a way to maximize accuracy. In most cases, the default is round-to-nearest.
  *
  * Params:
  *      T = precision type to round to
@@ -285,38 +492,30 @@ unittest
  * Returns:
  *      f in precision of type `T`
  */
-@safe pure nothrow
 T toPrec(T:float)(float f) { pragma(inline, false); return f; }
 /// ditto
-@safe pure nothrow
 T toPrec(T:float)(double f) { pragma(inline, false); return cast(T) f; }
 /// ditto
-@safe pure nothrow
 T toPrec(T:float)(real f)  { pragma(inline, false); return cast(T) f; }
 /// ditto
-@safe pure nothrow
 T toPrec(T:double)(float f) { pragma(inline, false); return f; }
 /// ditto
-@safe pure nothrow
 T toPrec(T:double)(double f) { pragma(inline, false); return f; }
 /// ditto
-@safe pure nothrow
 T toPrec(T:double)(real f)  { pragma(inline, false); return cast(T) f; }
 /// ditto
-@safe pure nothrow
 T toPrec(T:real)(float f) { pragma(inline, false); return f; }
 /// ditto
-@safe pure nothrow
 T toPrec(T:real)(double f) { pragma(inline, false); return f; }
 /// ditto
-@safe pure nothrow
 T toPrec(T:real)(real f)  { pragma(inline, false); return f; }
 
 @safe unittest
 {
-    static float f = 1.1f;
-    static double d = 1.1;
-    static real r = 1.1L;
+    // Test all instantiations work with all combinations of float.
+    float f = 1.1f;
+    double d = 1.1;
+    real r = 1.1L;
     f = toPrec!float(f + f);
     f = toPrec!float(d + d);
     f = toPrec!float(r + r);
@@ -327,17 +526,32 @@ T toPrec(T:real)(real f)  { pragma(inline, false); return f; }
     r = toPrec!real(d + d);
     r = toPrec!real(r + r);
 
+    // Comparison tests.
+    bool approxEqual(T)(T lhs, T rhs)
+    {
+        return fabs((lhs - rhs) / rhs) <= 1e-2 || fabs(lhs - rhs) <= 1e-5;
+    }
+
     enum real PIR = 0xc.90fdaa22168c235p-2;
     enum double PID = 0x1.921fb54442d18p+1;
     enum float PIF = 0x1.921fb6p+1;
+    static assert(approxEqual(toPrec!float(PIR), PIF));
+    static assert(approxEqual(toPrec!double(PIR), PID));
+    static assert(approxEqual(toPrec!real(PIR), PIR));
+    static assert(approxEqual(toPrec!float(PID), PIF));
+    static assert(approxEqual(toPrec!double(PID), PID));
+    static assert(approxEqual(toPrec!real(PID), PID));
+    static assert(approxEqual(toPrec!float(PIF), PIF));
+    static assert(approxEqual(toPrec!double(PIF), PIF));
+    static assert(approxEqual(toPrec!real(PIF), PIF));
 
-    assert(toPrec!float(PIR) == PIF);
-    assert(toPrec!double(PIR) == PID);
-    assert(toPrec!real(PIR) == PIR);
-    assert(toPrec!float(PID) == PIF);
-    assert(toPrec!double(PID) == PID);
-    assert(toPrec!real(PID) == PID);
-    assert(toPrec!float(PIF) == PIF);
-    assert(toPrec!double(PIF) == PIF);
-    assert(toPrec!real(PIF) == PIF);
+    assert(approxEqual(toPrec!float(PIR), PIF));
+    assert(approxEqual(toPrec!double(PIR), PID));
+    assert(approxEqual(toPrec!real(PIR), PIR));
+    assert(approxEqual(toPrec!float(PID), PIF));
+    assert(approxEqual(toPrec!double(PID), PID));
+    assert(approxEqual(toPrec!real(PID), PID));
+    assert(approxEqual(toPrec!float(PIF), PIF));
+    assert(approxEqual(toPrec!double(PIF), PIF));
+    assert(approxEqual(toPrec!real(PIF), PIF));
 }

@@ -35,7 +35,7 @@ version (LDC)
     // llvm.(u)mul.with.overflow.i64 might fall back to a software implementation
     // in the form of __mulodi4, which only exists in compiler-rt and not
     // libgcc. Thus, we need to be sure not to emit it for now (see GitHub #818).
-    version (X86_64)
+    version (D_LP64)
         version = LDC_HasNativeI64Mul;
 }
 
@@ -709,7 +709,9 @@ long muls()(long x, long y, ref bool overflow)
     }
     immutable long r = cast(ulong)x * cast(ulong)y;
     enum not0or1 = ~1L;
-    if ((x & not0or1) && ((r == y)? r : (r / x) != y))
+    if ((x & not0or1) &&
+        ((r == y) ? r != 0
+                  : (r == 0x8000_0000_0000_0000 && x == -1L) || ((r / x) != y)))
         overflow = true;
     return r;
 }
