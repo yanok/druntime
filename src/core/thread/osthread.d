@@ -147,7 +147,6 @@ else
     version = StackGrowsDown;
 }
 
-
 /**
  * Returns the process ID of the calling process, which is guaranteed to be
  * unique on the system. This call is always successful.
