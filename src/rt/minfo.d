@@ -630,7 +630,7 @@ struct ModuleGroup
                                 ctorInCycle = true;
                         }
                         assert(stack[start].mod == m);
-                        if (false && ctorInCycle)
+                        if (ctorInCycle)
                         {
                             return false;
                         }
