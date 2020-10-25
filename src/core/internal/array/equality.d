@@ -1,7 +1,7 @@
 /**
- * This module contains compiler support determining equality of dynamic arrays.
+ * This module contains compiler support determining equality of arrays.
  *
- * Copyright: Copyright Digital Mars 2000 - 2019.
+ * Copyright: Copyright Digital Mars 2000 - 2020.
  * License: Distributed under the
  *      $(LINK2 http://www.boost.org/LICENSE_1_0.txt, Boost Software License 1.0).
  *    (See accompanying file LICENSE)
@@ -9,19 +9,6 @@
  */
 
 module core.internal.array.equality;
-
-// compiler frontend lowers dynamic array comparison to this
-bool __ArrayEq(T1, T2)(T1[] a, T2[] b)
-{
-    if (a.length != b.length)
-        return false;
-    foreach (size_t i; 0 .. a.length)
-    {
-        if (a[i] != b[i])
-            return false;
-    }
-    return true;
-}
 
 // The compiler lowers `lhs == rhs` to `__equals(lhs, rhs)` for
 // * dynamic arrays,

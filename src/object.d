@@ -73,7 +73,11 @@ version (D_ObjectiveC)
 version (Posix) public import core.attribute : gnuAbiTag;
 
 // Some ABIs use a complex varargs implementation requiring TypeInfo.argTypes().
-version (X86_64)
+version (GNU)
+{
+    // No TypeInfo-based core.vararg.va_arg().
+}
+else version (X86_64)
 {
     version (DigitalMars) version = WithArgTypes;
     else version (Windows) { /* no need for Win64 ABI */ }
@@ -351,16 +355,14 @@ class TypeInfo
         return hashOf(this.toString());
     }
 
-    override int opCmp(Object o)
+    override int opCmp(Object rhs)
     {
-        import core.internal.string : dstrcmp;
-
-        if (this is o)
+        if (this is rhs)
             return 0;
-        TypeInfo ti = cast(TypeInfo)o;
+        auto ti = cast(TypeInfo) rhs;
         if (ti is null)
             return 1;
-        return dstrcmp(this.toString(), ti.toString());
+        return __cmp(this.toString(), ti.toString());
     }
 
     override bool opEquals(Object o)
@@ -484,8 +486,8 @@ class TypeInfo_Enum : TypeInfo
     }
 
     override size_t getHash(scope const void* p) const { return base.getHash(p); }
-    override bool equals(scope const void* p1, scope const void* p2) const { return base.equals(p1, p2); }
-    override int compare(scope const void* p1, scope const void* p2) const { return base.compare(p1, p2); }
+    override bool equals(in void* p1, in void* p2) const { return base.equals(p1, p2); }
+    override int compare(in void* p1, in void* p2) const { return base.compare(p1, p2); }
     override @property size_t tsize() nothrow pure const { return base.tsize; }
     override void swap(void* p1, void* p2) const { return base.swap(p1, p2); }
 
@@ -674,7 +676,7 @@ class TypeInfo_StaticArray : TypeInfo
         import core.internal.string : unsignedToTempString;
 
         char[20] tmpBuff = void;
-        return value.toString() ~ "[" ~ unsignedToTempString(len, tmpBuff, 10) ~ "]";
+        return value.toString() ~ "[" ~ unsignedToTempString(len, tmpBuff) ~ "]";
     }
 
     override bool opEquals(Object o)
@@ -723,28 +725,22 @@ class TypeInfo_StaticArray : TypeInfo
 
     override void swap(void* p1, void* p2) const
     {
-        import core.memory;
         import core.stdc.string : memcpy;
 
-        void* tmp;
-        size_t sz = value.tsize;
-        ubyte[16] buffer;
-        void* pbuffer;
-
-        if (sz < buffer.sizeof)
-            tmp = buffer.ptr;
-        else
-            tmp = pbuffer = (new void[sz]).ptr;
-
-        for (size_t u = 0; u < len; u += sz)
+        size_t remaining = value.tsize * len;
+        void[size_t.sizeof * 4] buffer = void;
+        while (remaining > buffer.length)
         {
-            size_t o = u * sz;
-            memcpy(tmp, p1 + o, sz);
-            memcpy(p1 + o, p2 + o, sz);
-            memcpy(p2 + o, tmp, sz);
+            memcpy(buffer.ptr, p1, buffer.length);
+            memcpy(p1, p2, buffer.length);
+            memcpy(p2, buffer.ptr, buffer.length);
+            p1 += buffer.length;
+            p2 += buffer.length;
+            remaining -= buffer.length;
         }
-        if (pbuffer)
-            GC.free(pbuffer);
+        memcpy(buffer.ptr, p1, remaining);
+        memcpy(p1, p2, remaining);
+        memcpy(p2, buffer.ptr, remaining);
     }
 
     override const(void)[] initializer() nothrow pure const
@@ -792,6 +788,23 @@ class TypeInfo_StaticArray : TypeInfo
 
     // just return the rtInfo of the element, we have no generic type T to run RTInfo!T on
     override @property immutable(void)* rtInfo() nothrow pure const @safe { return value.rtInfo(); }
+}
+
+// https://issues.dlang.org/show_bug.cgi?id=21315
+@system unittest
+{
+    int[16] a, b;
+    foreach (int i; 0 .. 16)
+    {
+        a[i] = i;
+        b[i] = ~i;
+    }
+    typeid(int[16]).swap(&a, &b);
+    foreach (int i; 0 .. 16)
+    {
+        assert(a[i] == ~i);
+        assert(b[i] == i);
+    }
 }
 
 class TypeInfo_AssociativeArray : TypeInfo
@@ -2052,7 +2065,7 @@ class Throwable : Object
 
         sink(typeid(this).name);
         sink("@"); sink(file);
-        sink("("); sink(unsignedToTempString(line, tmpBuff, 10)); sink(")");
+        sink("("); sink(unsignedToTempString(line, tmpBuff)); sink(")");
 
         if (msg.length)
         {
@@ -3066,7 +3079,6 @@ private size_t getArrayHash(const scope TypeInfo element, const scope void* ptr,
             || cast(const TypeInfo_Interface) element;
     }
 
-    import core.internal.traits : externDFunc;
     if (!hasCustomToHash(element))
         return hashOf(ptr[0 .. elementSize * count]);
 
@@ -4059,7 +4071,6 @@ public import core.internal.array.appending : _d_arrayappendTImpl;
 public import core.internal.array.appending : _d_arrayappendcTXImpl;
 public import core.internal.array.comparison : __cmp;
 public import core.internal.array.equality : __equals;
-public import core.internal.array.equality : __ArrayEq;
 public import core.internal.array.casting: __ArrayCast;
 public import core.internal.array.concatenation : _d_arraycatnTXImpl;
 public import core.internal.array.construction : _d_arrayctor;
