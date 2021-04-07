@@ -408,7 +408,7 @@ struct GC
      */
     static uint getAttr( const scope void* p ) nothrow
     {
-        return getAttr(cast()p);
+        return gc_getAttr(cast(void*) p);
     }
 
 
@@ -435,7 +435,7 @@ struct GC
      */
     static uint setAttr( const scope void* p, uint a ) nothrow
     {
-        return setAttr(cast()p, a);
+        return gc_setAttr(cast(void*) p, a);
     }
 
 
@@ -462,7 +462,7 @@ struct GC
      */
     static uint clrAttr( const scope void* p, uint a ) nothrow
     {
-        return clrAttr(cast()p, a);
+        return gc_clrAttr(cast(void*) p, a);
     }
 
 
@@ -1038,8 +1038,13 @@ struct GC
         GC.runFinalizers((cast(const void*)typeid(Resource).destructor)[0..1]);
         assert(Resource.outcome == Outcome.calledFromDruntime);
         Resource.outcome = Outcome.notCalled;
-        r.destroy;
-        assert(Resource.outcome == Outcome.notCalled);
+
+        debug(MEMSTOMP) {} else
+        {
+            // assume Resource data is still available
+            r.destroy;
+            assert(Resource.outcome == Outcome.notCalled);
+        }
 
         r = new Resource;
         assert(Resource.outcome == Outcome.notCalled);

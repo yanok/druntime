@@ -3,7 +3,7 @@ module gc.impl.proto.gc;
 
 import core.gc.gcinterface;
 
-import rt.util.container.array;
+import core.internal.container.array;
 
 import cstdlib = core.stdc.stdlib : calloc, free, malloc, realloc;
 static import core.memory;
@@ -36,7 +36,7 @@ class ProtoGC : GC
     // Call this function when initializing the real GC
     // upon ProtoGC term. This function should be called
     // after the real GC is in place.
-    void term()
+    void transferRangesAndRoots()
     {
         // Transfer all ranges
         foreach (ref r; ranges)
