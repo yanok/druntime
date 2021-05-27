@@ -79,7 +79,7 @@ ifeq (solaris,$(OS))
 endif
 
 # Set DFLAGS
-UDFLAGS:=-conf= -Isrc -Iimport -w -de -dip1000 -preview=fieldwise $(MODEL_FLAG) $(PIC) $(OPTIONAL_COVERAGE) -preview=dtorfields -transition=complex
+UDFLAGS:=-conf= -Isrc -Iimport -w -de -dip1000 -preview=fieldwise $(MODEL_FLAG) $(PIC) $(OPTIONAL_COVERAGE) -preview=dtorfields
 ifeq ($(BUILD),debug)
 	UDFLAGS += -g -debug
 	DFLAGS:=$(UDFLAGS)
@@ -385,7 +385,7 @@ UT_MODULES:=$(patsubst src/%.d,$(ROOT)/unittest/%,$(SRCS))
 HAS_ADDITIONAL_TESTS:=$(shell test -d test && echo 1)
 ifeq ($(HAS_ADDITIONAL_TESTS),1)
 	ADDITIONAL_TESTS:=test/init_fini test/exceptions test/coverage test/profile test/cycles test/allocations test/typeinfo \
-	    test/aa test/cpuid test/gc test/hash \
+	    test/aa test/cpuid test/gc test/hash test/lifetime \
 	    test/thread test/unittest test/imports test/betterc test/stdcpp test/config
 	ADDITIONAL_TESTS+=$(if $(SHARED),test/shared,)
 endif
