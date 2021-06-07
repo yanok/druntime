@@ -1181,6 +1181,7 @@ version (D_InlineAsm_X86_64)
  *  Bitwise rotate `value` left (`rol`) or right (`ror`) by
  *  `count` bit positions.
  */
+pragma(inline, true) // LDC
 pure T rol(T)(const T value, const uint count)
     if (__traits(isIntegral, T) && __traits(isUnsigned, T))
 {
@@ -1188,6 +1189,7 @@ pure T rol(T)(const T value, const uint count)
     return cast(T) ((value << count) | (value >> (T.sizeof * 8 - count)));
 }
 /// ditto
+pragma(inline, true) // LDC
 pure T ror(T)(const T value, const uint count)
     if (__traits(isIntegral, T) && __traits(isUnsigned, T))
 {
@@ -1195,6 +1197,7 @@ pure T ror(T)(const T value, const uint count)
     return cast(T) ((value >> count) | (value << (T.sizeof * 8 - count)));
 }
 /// ditto
+pragma(inline, true) // LDC
 pure T rol(uint count, T)(const T value)
     if (__traits(isIntegral, T) && __traits(isUnsigned, T))
 {
@@ -1202,6 +1205,7 @@ pure T rol(uint count, T)(const T value)
     return cast(T) ((value << count) | (value >> (T.sizeof * 8 - count)));
 }
 /// ditto
+pragma(inline, true) // LDC
 pure T ror(uint count, T)(const T value)
     if (__traits(isIntegral, T) && __traits(isUnsigned, T))
 {
