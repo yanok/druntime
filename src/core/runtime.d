@@ -734,9 +734,10 @@ version(WEKA)
         void*  _interface;
         int       numframes;
         bool      alreadyHandled;  // use the padding for this extra member
-        void*[0]  callstack;
+        void*[1]  callstack;
     }
-    //static assert (DefaultTraceInfo.sizeof == DefaultTraceInfoABI.sizeof);
+    // make sure the ABI matches
+    static assert ({static interface I {} static class C: I {} return __traits(classInstanceSize, C);}() == (void*[3]).sizeof);
     static assert (DefaultTraceInfo.numframes.offsetof == DefaultTraceInfoABI.numframes.offsetof);
     static assert (DefaultTraceInfo.callstack.offsetof == DefaultTraceInfoABI.callstack.offsetof);
 }
