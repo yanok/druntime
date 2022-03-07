@@ -30,6 +30,9 @@ version (LDC)
     import ldc.attributes;
     import ldc.llvmasm;
 
+    // Unconditionally change ABI to support sanitizers (adds fields to data structures):
+    version = SupportSanitizers_ABI;
+    // But runtime code is conditionally added by `SupportSanitizers`:
     version (SupportSanitizers)
     {
         import ldc.sanitizers_optionally_linked;
@@ -543,6 +546,10 @@ version (LDC)
     }
 
     version (Android) version = CheckFiberMigration;
+
+    // Fiber migration across threads is (probably) not possible with ASan fakestack enabled (different parts of the stack
+    // will contain fakestack pointers that were created on different threads...)
+    version (SupportSanitizers) version = CheckFiberMigration;
 }
 
 // Fiber support for SjLj style exceptions
@@ -772,6 +779,16 @@ class Fiber
         // the existence of debug symbols and other conditions. Avoid causing
         // stack overflows by defaulting to a larger stack size
         enum defaultStackPages = 8;
+    else version (OSX)
+    {
+        version (X86_64)
+            // libunwind on macOS 11 now requires more stack space than 16k, so
+            // default to a larger stack size. This is only applied to X86 as
+            // the PAGESIZE is still 4k, however on AArch64 it is 16k.
+            enum defaultStackPages = 8;
+        else
+            enum defaultStackPages = 4;
+    }
     else
         enum defaultStackPages = 4;
 
@@ -1192,6 +1209,11 @@ private:
         //       requires too much special logic to be worthwhile.
         m_ctxt = new StackContext;
 
+        version (SupportSanitizers)
+        {
+            // m_curThread is not initialized yet, so we have to wait with storing this StackContext's asan_fakestack handler until switchIn is called.
+        }
+
         version (Windows)
         {
             // reserve memory for stack
@@ -1254,10 +1276,14 @@ private:
                 // Allocate more for the memory guard
                 sz += guardPageSize;
 
+                int mmap_flags = MAP_PRIVATE | MAP_ANON;
+                version (OpenBSD)
+                    mmap_flags |= MAP_STACK;
+
                 m_pmem = mmap( null,
                                sz,
                                PROT_READ | PROT_WRITE,
-                               MAP_PRIVATE | MAP_ANON,
+                               mmap_flags,
                                -1,
                                0 );
                 if ( m_pmem == MAP_FAILED )
@@ -1934,6 +1960,13 @@ private:
             m_curThread = tobj;
         }
 
+        version (SupportSanitizers)
+        {
+            // Fiber migration across threads is (probably) not possible with fakestack enabled (different parts of the stack
+            // will contain fakestack pointers that were created on different threads...)
+            m_ctxt.asan_fakestack = m_curThread.asan_fakestack;
+        }
+
         version (SjLj_Exceptions)
             SjLjFuncContext* oldsjlj = swapSjLjStackTop(m_sjljExStackTop);
 
@@ -2031,7 +2064,7 @@ private:
     ///////////////////////////////////////////////////////////////////////////
     // Address Sanitizer support
     ///////////////////////////////////////////////////////////////////////////
-    version (SupportSanitizers)
+    version (SupportSanitizers_ABI)
     {
     private:
         void* __fake_stack;
@@ -2336,7 +2369,7 @@ unittest
 
     try
     {
-        (new Fiber({
+        (new Fiber(function() {
             throw new Exception( MSG );
         })).call();
         assert( false, "Expected rethrown exception." );

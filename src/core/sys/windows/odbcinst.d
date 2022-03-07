@@ -4,7 +4,7 @@
  * Translated from MinGW Windows headers
  *
  * License: $(LINK2 http://www.boost.org/LICENSE_1_0.txt, Boost License 1.0)
- * Source: $(DRUNTIMESRC src/core/sys/windows/_odbcinst.d)
+ * Source: $(DRUNTIMESRC core/sys/windows/_odbcinst.d)
  */
 module core.sys.windows.odbcinst;
 version (Windows):
@@ -155,8 +155,7 @@ version (Unicode) {
     alias SQLInstallDriverManagerW SQLInstallDriverManager;
     alias SQLInstallerErrorW SQLInstallerError;
     alias SQLInstallODBCW SQLInstallODBC;
-    deprecated ("Use SQLInstallTranslatorExW instead")
-    alias SQLInstallTranslatorW SQLInstallTranslator;
+    deprecated alias SQLInstallTranslatorW SQLInstallTranslator;
     alias SQLInstallTranslatorExW SQLInstallTranslatorEx;
     alias SQLPostInstallerErrorW SQLPostInstallerError;
     alias SQLReadFileDSNW SQLReadFileDSN;

@@ -36,6 +36,11 @@ version (LDC)
 
     version (PPC)   version = PPC_Any;
     version (PPC64) version = PPC_Any;
+
+    version (SupportSanitizers)
+    {
+        import ldc.sanitizers_optionally_linked;
+    }
 }
 
 
@@ -215,15 +220,6 @@ else
  */
 class Thread : ThreadBase
 {
-    //
-    // Main process thread
-    //
-    version (FreeBSD)
-    {
-        // set when suspend failed and should be retried, see Issue 13416
-        private shared bool m_suspendagain;
-    }
-
     //
     // Standard thread data
     //
@@ -715,7 +711,7 @@ class Thread : ThreadBase
                     // the effective maximum.
 
                     // maxupri
-                    result.PRIORITY_MIN = -clinfo[0];
+                    result.PRIORITY_MIN = -cast(int)(clinfo[0]);
                     // by definition
                     result.PRIORITY_DEFAULT = 0;
                 }
@@ -1105,6 +1101,7 @@ unittest
     try
     {
         new Thread(
+        function()
         {
             throw new Exception( MSG );
         }).start().join();
@@ -1205,6 +1202,18 @@ unittest
     thr.join();
 }
 
+// https://issues.dlang.org/show_bug.cgi?id=22124
+unittest
+{
+    Thread thread = new Thread({});
+    auto fun(Thread t, int x)
+    {
+        t.__ctor({x = 3;});
+        return t;
+    }
+    static assert(!__traits(compiles, () @nogc => fun(thread, 3) ));
+}
+
 unittest
 {
     import core.sync.semaphore;
@@ -1283,6 +1292,13 @@ private extern (D) ThreadBase attachThread(ThreadBase _thisThread) @nogc nothrow
 
     StackContext* thisContext = &thisThread.m_main;
     assert( thisContext == thisThread.m_curr );
+
+    version (SupportSanitizers)
+    {
+        // Save this thread's fake stack handler, to be stored in each StackContext belonging to this thread.
+        thisThread.asan_fakestack  = asanGetCurrentFakeStack();
+        thisContext.asan_fakestack = thisThread.asan_fakestack;
+    }
 
     version (Windows)
     {
@@ -1374,6 +1390,12 @@ version (Windows)
             thisThread.m_hndl = GetCurrentThreadHandle();
             thisThread.tlsGCdataInit();
             Thread.setThis( thisThread );
+
+            version (SupportSanitizers)
+            {
+                // Save this thread's fake stack handler, to be stored in each StackContext belonging to this thread.
+                thisThread.asan_fakestack  = asanGetCurrentFakeStack();
+            }
         }
         else
         {
@@ -1382,7 +1404,18 @@ version (Windows)
             {
                 thisThread.tlsGCdataInit();
                 Thread.setThis( thisThread );
+
+                version (SupportSanitizers)
+                {
+                    // Save this thread's fake stack handler, to be stored in each StackContext belonging to this thread.
+                    thisThread.asan_fakestack  = asanGetCurrentFakeStack();
+                }
             });
+        }
+
+        version (SupportSanitizers)
+        {
+            thisContext.asan_fakestack = thisThread.asan_fakestack;
         }
 
         Thread.add( thisThread, false );
@@ -2028,7 +2061,6 @@ extern (C) void thread_suspendAll() nothrow
             // subtract own thread
             assert(cnt >= 1);
             --cnt;
-        Lagain:
             // wait for semaphore notifications
             for (; cnt; --cnt)
             {
@@ -2038,20 +2070,6 @@ extern (C) void thread_suspendAll() nothrow
                         onThreadError("Unable to wait for semaphore");
                     errno = 0;
                 }
-            }
-            version (FreeBSD)
-            {
-                // avoid deadlocks, see Issue 13416
-                t = ThreadBase.sm_tbeg.toThread;
-                while (t)
-                {
-                    auto tn = t.next;
-                    if (t.m_suspendagain && suspend(t))
-                        ++cnt;
-                    t = tn.toThread;
-                }
-                if (cnt)
-                    goto Lagain;
             }
         }
     }
@@ -2205,10 +2223,7 @@ extern (C) void thread_init() @nogc
         status = sem_init( &suspendCount, 0, 0 );
         assert( status == 0 );
     }
-    version (LDC)
-        _mainThreadStore[] = __traits(initSymbol, Thread)[];
-    else if (typeid(Thread).initializer.ptr)
-        _mainThreadStore[] = typeid(Thread).initializer[];
+    _mainThreadStore[] = __traits(initSymbol, Thread)[];
     Thread.sm_main = attachThread((cast(Thread)_mainThreadStore.ptr).__ctor());
 }
 
@@ -2504,7 +2519,6 @@ else version (Posix)
                 status = sigdelset( &sigres, resumeSignalNumber );
                 assert( status == 0 );
 
-                version (FreeBSD) obj.m_suspendagain = false;
                 status = sem_post( &suspendCount );
                 assert( status == 0 );
 
@@ -2515,19 +2529,6 @@ else version (Posix)
                     obj.m_curr.tstack = obj.m_curr.bstack;
                 }
             }
-
-            // avoid deadlocks on FreeBSD, see Issue 13416
-            version (FreeBSD)
-            {
-                auto obj = Thread.getThis();
-                if (THR_IN_CRITICAL(obj.m_addr))
-                {
-                    obj.m_suspendagain = true;
-                    if (sem_post(&suspendCount)) assert(0);
-                    return;
-                }
-            }
-
             callWithStackShell(&op);
         }
 
@@ -2540,29 +2541,6 @@ else version (Posix)
         do
         {
 
-        }
-
-        // HACK libthr internal (thr_private.h) macro, used to
-        // avoid deadlocks in signal handler, see Issue 13416
-        version (FreeBSD) bool THR_IN_CRITICAL(pthread_t p) nothrow @nogc
-        {
-            import core.sys.posix.config : c_long;
-            import core.sys.posix.sys.types : lwpid_t;
-
-            // If the begin of pthread would be changed in libthr (unlikely)
-            // we'll run into undefined behavior, compare with thr_private.h.
-            static struct pthread
-            {
-                c_long tid;
-                static struct umutex { lwpid_t owner; uint flags; uint[2] ceilings; uint[4] spare; }
-                umutex lock;
-                uint cycle;
-                int locklevel;
-                int critical_count;
-                // ...
-            }
-            auto priv = cast(pthread*)p;
-            return priv.locklevel > 0 || priv.critical_count > 0;
         }
     }
 }

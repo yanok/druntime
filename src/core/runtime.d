@@ -274,7 +274,7 @@ struct Runtime
      * an appropriate calling context from which to begin the trace.
      *
      * Params:
-     *  h = The new trace handler.  Set to null to use the default handler.
+     *  h = The new trace handler.  Set to null to disable exception backtracing.
      */
     extern(C) pragma(mangle, "rt_setTraceHandler") static @property void traceHandler(TraceHandler h);
 
@@ -866,6 +866,7 @@ else static if (hasExecinfo) private class DefaultTraceInfo : Throwable.TraceInf
         version (linux) enum enableDwarf = true;
         else version (FreeBSD) enum enableDwarf = true;
         else version (DragonFlyBSD) enum enableDwarf = true;
+        else version (OpenBSD) enum enableDwarf = true;
         else version (Darwin) enum enableDwarf = true;
         else enum enableDwarf = false;
 

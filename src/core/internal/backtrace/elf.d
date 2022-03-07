@@ -31,10 +31,14 @@ else version (OpenBSD)
     import core.sys.openbsd.sys.elf;
     version = LinuxOrBSD;
 }
+else version (Solaris)
+{
+    import core.sys.solaris.sys.elf;
+    version = LinuxOrBSD;
+}
 
 version (LinuxOrBSD):
 
-import core.internal.elf.dl;
 import core.internal.elf.io;
 
 struct Image
@@ -43,9 +47,15 @@ struct Image
 
     static Image openSelf()
     {
-        const(char)* selfPath = SharedObject.thisExecutable().name().ptr;
+        import core.stdc.stdlib : free;
 
         Image image;
+
+        char* selfPath = thisExePath();
+        if (selfPath is null)
+            return image;
+        scope(exit) free(selfPath);
+
         if (!ElfFile.open(selfPath, image.file))
             image.file = ElfFile.init;
 
@@ -74,6 +84,8 @@ struct Image
 
     @property size_t baseAddress()
     {
+        import core.internal.elf.dl : SharedObject;
+
         // the DWARF addresses for DSOs are relative
         const isDynamicSharedObject = (file.ehdr.e_type == ET_DYN);
         if (!isDynamicSharedObject)

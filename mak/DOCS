@@ -4,6 +4,7 @@ DOCS=\
 	$(DOCDIR)\core_bitop.html \
 	$(DOCDIR)\core_checkedint.html \
 	$(DOCDIR)\core_exception.html \
+	$(DOCDIR)\core_int128.html \
 	$(DOCDIR)\core_math.html \
 	$(DOCDIR)\core_vararg.html \
 	$(DOCDIR)\core_volatile.html \
@@ -200,7 +201,9 @@ DOCS=\
 	$(DOCDIR)\core_sys_linux_err.html \
 	$(DOCDIR)\core_sys_linux_errno.html \
 	$(DOCDIR)\core_sys_linux_fcntl.html \
+	$(DOCDIR)\core_sys_linux_fs.html \
 	$(DOCDIR)\core_sys_linux_ifaddrs.html \
+	$(DOCDIR)\core_sys_linux_io_uring.html \
 	$(DOCDIR)\core_sys_linux_link.html \
 	$(DOCDIR)\core_sys_linux_sched.html \
 	$(DOCDIR)\core_sys_linux_stdio.html \
@@ -511,7 +514,9 @@ DOCS=\
 	$(DOCDIR)\core_thread_fiber.html \
 	$(DOCDIR)\core_thread_osthread.html \
 	$(DOCDIR)\core_thread_threadbase.html \
+	$(DOCDIR)\core_thread.html \
 	\
+	$(DOCDIR)\core_builtins.html \
 	\
 	$(DOCDIR)\etc_linux_memoryerror.html \
 	\

@@ -38,6 +38,34 @@ version (CoreDdoc)
 }
 
 /**
+ * Use this attribute to specify that a global symbol should be emitted with
+ * weak linkage. This is primarily useful in defining library functions that
+ * can be overridden by user code, though it can also be used with shared and
+ * static variables too.
+ *
+ * The overriding symbol must have the same type as the weak symbol. In
+ * addition, if it designates a variable it must also have the same size and
+ * alignment as the weak symbol.
+ *
+ * Quote from the LLVM manual: "Note that weak linkage does not actually allow
+ * the optimizer to inline the body of this function into callers because it
+ * doesn’t know if this definition of the function is the definitive definition
+ * within the program or whether it will be overridden by a stronger
+ * definition."
+ *
+ * This attribute is only meaningful to the GNU and LLVM D compilers. The
+ * Digital Mars D compiler emits all symbols with weak linkage by default.
+ */
+version (DigitalMars)
+{
+    enum weak;
+}
+else
+{
+    // GDC and LDC declare this attribute in their own modules.
+}
+
+/**
  * Use this attribute to attach an Objective-C selector to a method.
  *
  * This is a special compiler recognized attribute, it has several
@@ -213,3 +241,52 @@ version (UdaGNUAbiTag) struct gnuAbiTag
         this.tags = tags;
     }
 }
+
+/**
+ * Use this attribute to ensure that values of a `struct` or `union` type are
+ * not discarded.
+ *
+ * The value of an expression is considered to be discarded if
+ *
+ * $(UL
+ *  $(LI
+ *      the expression is the top-level expression in a statement or the
+ *      left-hand expression in a comma expression, and
+ *  ),
+ *  $(LI
+ *      the expression is not an assignment (`=`, `+=`, etc.), increment
+ *      (`++`), or decrement (`--`) expression.
+ *  ),
+ * )
+ *
+ * If the declaration of a `struct` or `union` type has the `@mustuse`
+ * attribute, the compiler will emit an error any time a value of that type
+ * would be discarded.
+ *
+ * Currently, `@mustuse` is only recognized by the compiler when attached to
+ * `struct` and `union` declarations. To allow for future expansion, attaching
+ * `@mustuse` to a `class`, `interface`, `enum`, or function declaration is
+ * currently forbidden, and will result in a compile-time error. All other uses
+ * of `@mustuse` are ignored.
+ *
+ * Examples:
+ * ---
+ * @mustuse struct ErrorCode { int value; }
+ *
+ * extern(C) ErrorCode doSomething();
+ *
+ * void main()
+ * {
+ *     // error: would discard a value of type ErrorCode
+ *     //doSomething();
+ *
+ *     ErrorCode result;
+ *     // ok: value is assigned to a variable
+ *     result = doSomething();
+ *
+ *     // ok: can ignore the value explicitly with a cast
+ *     cast(void) doSomething();
+ * }
+ * ---
+ */
+enum mustuse;

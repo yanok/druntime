@@ -301,18 +301,15 @@ TypeInfo_Struct fakeEntryTI(ref Impl aa, const TypeInfo keyti, const TypeInfo va
     void* p = GC.malloc(sizeti + (2 + rtisize) * (void*).sizeof);
     import core.stdc.string : memcpy;
 
-    version (LDC)
-        memcpy(p, __traits(initSymbol, TypeInfo_Struct).ptr, sizeti);
-    else
-        memcpy(p, typeid(TypeInfo_Struct).initializer().ptr, sizeti);
+    memcpy(p, __traits(initSymbol, TypeInfo_Struct).ptr, sizeti);
 
     auto ti = cast(TypeInfo_Struct) p;
     auto extra = cast(TypeInfo*)(p + sizeti);
     extra[0] = cast() kti;
     extra[1] = cast() vti;
 
-    static immutable tiName = __MODULE__ ~ ".Entry!(...)";
-    ti.name = tiName;
+    static immutable tiMangledName = "S2rt3aaA__T5EntryZ";
+    ti.mangledName = tiMangledName;
 
     ti.m_RTInfo = rtisize > 0 ? rtinfoEntry(aa, keyinfo, valinfo, cast(size_t*)(extra + 2), rtisize) : rtinfo;
     ti.m_flags = ti.m_RTInfo is rtinfoNoPointers ? cast(TypeInfo_Struct.StructFlags)0 : TypeInfo_Struct.StructFlags.hasPointers;
@@ -850,11 +847,9 @@ extern (C) hash_t _aaGetHash(scope const AA* paa, scope const TypeInfo tiRaw) no
     size_t h;
     foreach (b; aa.buckets)
     {
-        if (!b.filled)
-            continue;
-        size_t[2] h2 = [keyHash(b.entry), valHash(b.entry + off)];
         // use addition here, so that hash is independent of element order
-        h += hashOf(h2);
+        if (b.filled)
+            h += hashOf(valHash(b.entry + off), keyHash(b.entry));
     }
 
     return h;
@@ -872,7 +867,7 @@ struct Range
 
 extern (C) pure nothrow @nogc @safe
 {
-    Range _aaRange(return AA aa)
+    Range _aaRange(return scope AA aa)
     {
         if (!aa)
             return Range();
