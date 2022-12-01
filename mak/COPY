@@ -52,6 +52,7 @@ COPY=\
 	$(IMPDIR)\core\internal\array\casting.d \
 	$(IMPDIR)\core\internal\array\capacity.d \
 	$(IMPDIR)\core\internal\array\concatenation.d \
+	$(IMPDIR)\core\internal\array\duplication.d \
 	$(IMPDIR)\core\internal\array\operations.d \
 	$(IMPDIR)\core\internal\array\utils.d \
 	\
@@ -120,7 +121,14 @@ COPY=\
 	$(IMPDIR)\core\stdcpp\vector.d \
 	$(IMPDIR)\core\stdcpp\xutility.d \
 	\
+	$(IMPDIR)\core\sync\barrier.d \
+	$(IMPDIR)\core\sync\condition.d \
+	$(IMPDIR)\core\sync\config.d \
 	$(IMPDIR)\core\sync\event.d \
+	$(IMPDIR)\core\sync\exception.d \
+	$(IMPDIR)\core\sync\mutex.d \
+	$(IMPDIR)\core\sync\rwmutex.d \
+	$(IMPDIR)\core\sync\semaphore.d \
 	\
 	$(IMPDIR)\core\sys\bionic\err.d \
 	$(IMPDIR)\core\sys\bionic\fcntl.d \
@@ -204,6 +212,8 @@ COPY=\
 	$(IMPDIR)\core\sys\dragonflybsd\sys\mman.d \
 	$(IMPDIR)\core\sys\dragonflybsd\sys\socket.d \
 	$(IMPDIR)\core\sys\dragonflybsd\sys\sysctl.d \
+	\
+	$(IMPDIR)\core\sys\elf\package.d \
 	\
 	$(IMPDIR)\core\sys\linux\config.d \
 	$(IMPDIR)\core\sys\linux\dlfcn.d \

@@ -9,17 +9,20 @@ BUILD=release
 OS=windows
 DMD=$(DMD_DIR)\generated\$(OS)\$(BUILD)\32\dmd
 
+# Used for running MASM assembler on .asm files
 CC=dmc
+
 MAKE=make
 HOST_DMD=dmd
 
 DOCDIR=doc
 IMPDIR=import
 
+# For compiling D and ImportC files
 DFLAGS=-m32omf -conf= -O -release -preview=dip1000 -preview=fieldwise -preview=dtorfields -inline -w -Isrc -Iimport
+# For unittest build
 UDFLAGS=-m32omf -conf= -O -release -preview=dip1000 -preview=fieldwise -w -Isrc -Iimport
-DDOCFLAGS=-conf= -c -w -o- -Isrc -Iimport -version=CoreDdoc
-
+# Also for unittest build
 UTFLAGS=-version=CoreUnittest -unittest -checkaction=context
 
 CFLAGS=
@@ -29,11 +32,10 @@ DRUNTIME=lib\$(DRUNTIME_BASE).lib
 
 DOCFMT=
 
-target: import copydir copy $(DRUNTIME)
+target: copydir copy $(DRUNTIME)
 
 $(mak\COPY)
 $(mak\DOCS)
-$(mak\IMPORTS)
 $(mak\SRCS)
 
 # NOTE: trace.d and cover.d are not necessary for a successful build
@@ -44,10 +46,9 @@ $(mak\SRCS)
 OBJS= errno_c_32omf.obj src\rt\minit.obj
 OBJS_TO_DELETE= errno_c_32omf.obj
 
-######################## Header file generation ##############################
+######################## Header file copy ##############################
 
-import:
-	"$(MAKE)" -f mak/WINDOWS import DMD="$(DMD)" HOST_DMD="$(HOST_DMD)" MODEL=32 IMPDIR="$(IMPDIR)"
+import: copy
 
 copydir:
 	"$(MAKE)" -f mak/WINDOWS copydir DMD="$(DMD)" HOST_DMD="$(HOST_DMD)" MODEL=32 IMPDIR="$(IMPDIR)"
@@ -99,7 +100,7 @@ lib\win32\winspool.lib: def\winspool.def
 ################### C\ASM Targets ############################
 
 errno_c_32omf.obj: src\core\stdc\errno.c
-	$(CC) -c -o$@ $(CFLAGS) src\core\stdc\errno.c
+	$(DMD) -c -of=$@ $(DFLAGS) -v -P=-I. src\core\stdc\errno.c
 
 # only rebuild explicitly
 rebuild_minit_obj: src\rt\minit.asm

@@ -113,9 +113,6 @@ COPY:=$(subst \,/,$(COPY))
 include mak/DOCS
 DOCS:=$(subst \,/,$(DOCS))
 
-include mak/IMPORTS
-IMPORTS:=$(subst \,/,$(IMPORTS))
-
 include mak/SRCS
 SRCS:=$(subst \,/,$(SRCS))
 
@@ -132,9 +129,9 @@ TIMELIMIT:=$(if $(shell which timelimit 2>/dev/null || true),timelimit -t 10 ,)
 ######################## All of'em ##############################
 
 ifneq (,$(SHARED))
-target : import copy dll $(DRUNTIME)
+target : copy dll $(DRUNTIME)
 else
-target : import copy $(DRUNTIME)
+target : copy $(DRUNTIME)
 endif
 
 ######################## Doc .html file generation ##############################
@@ -195,6 +192,9 @@ $(DOC_OUTPUT_DIR)/core_stdc_%.html : src/core/stdc/%.d $(DMD)
 $(DOC_OUTPUT_DIR)/core_stdcpp_%.html : src/core/stdcpp/%.d $(DMD)
 	$(DMD) $(DDOCFLAGS) -Df$@ project.ddoc $(DOCFMT) $<
 
+$(DOC_OUTPUT_DIR)/core_sync.html : src/core/sync/package.d $(DMD)
+	$(DMD) $(DDOCFLAGS) -Df$@ project.ddoc $(DOCFMT) $<
+
 $(DOC_OUTPUT_DIR)/core_sync_%.html : src/core/sync/%.d $(DMD)
 	$(DMD) $(DDOCFLAGS) -Df$@ project.ddoc $(DOCFMT) $<
 
@@ -220,6 +220,9 @@ $(DOC_OUTPUT_DIR)/core_sys_dragonflybsd_netinet_%.html : src/core/sys/dragonflyb
 	$(DMD) $(DDOCFLAGS) -Df$@ project.ddoc $(DOCFMT) $<
 
 $(DOC_OUTPUT_DIR)/core_sys_dragonflybsd_sys_%.html : src/core/sys/dragonflybsd/sys/%.d $(DMD)
+	$(DMD) $(DDOCFLAGS) -Df$@ project.ddoc $(DOCFMT) $<
+
+$(DOC_OUTPUT_DIR)/core_sys_elf_%.html : src/core/sys/elf/%.d $(DMD)
 	$(DMD) $(DDOCFLAGS) -Df$@ project.ddoc $(DOCFMT) $<
 
 $(DOC_OUTPUT_DIR)/core_sys_freebsd_%.html : src/core/sys/freebsd/%.d $(DMD)
@@ -318,21 +321,14 @@ $(DOC_OUTPUT_DIR)/rt_typeinfo_%.html : src/rt/typeinfo/%.d $(DMD)
 $(DOC_OUTPUT_DIR)/rt_util_%.html : src/rt/util/%.d $(DMD)
 	$(DMD) $(DDOCFLAGS) -Df$@ project.ddoc $(DOCFMT) $<
 
-######################## Header .di file generation ##############################
+######################## Header file copy ##############################
 
-import: $(IMPORTS)
-
-$(IMPDIR)/core/sync/%.di : src/core/sync/%.d $(DMD)
-	@mkdir -p $(dir $@)
-	$(DMD) -conf= -c -o- -Isrc -Iimport -Hf$@ $<
-
-######################## Header .di file copy ##############################
+import: copy
 
 copy: $(COPY)
 
 $(IMPDIR)/object.d : src/object.d
 	@mkdir -p $(dir $@)
-	@rm -f $(IMPDIR)/object.di
 	@cp $< $@
 
 $(IMPDIR)/%.di : src/%.di
@@ -354,13 +350,13 @@ $(DMD):
 
 ################### C/ASM Targets ############################
 
-$(ROOT)/%.o : src/rt/%.c
+$(ROOT)/%.o : src/rt/%.c $(DMD)
 	@mkdir -p $(dir $@)
-	$(CC) -c $(CFLAGS) $< -o$@
+	$(DMD) -c $(DFLAGS) -I. -v $< -of$@
 
-$(ROOT)/errno_c.o : src/core/stdc/errno.c
+$(ROOT)/errno_c.o : src/core/stdc/errno.c $(DMD)
 	@mkdir -p $(dir $@)
-	$(CC) -c $(CFLAGS) $< -o$@
+	$(DMD) -c $(DFLAGS) -I. -v $< -of$@
 
 $(ROOT)/threadasm.o : src/core/threadasm.S
 	@mkdir -p $(dir $@)
