@@ -396,3 +396,19 @@ immutable weak = _weak();
 private struct _weak
 {
 }
+
+/++
+ + When applied to a function definition, specifies that this definition
+ + is only used during compile-time, so should not be codegened.
+ +
+ + Examples:
+ + ---
+ + import ldc.attributes;
+ +
+ + @ctfe Data generateDataAtCompileTime(Input)(Input input) { /* */ }
+ + ---
+ +/
+immutable ctfe = _ctfe();
+private struct _ctfe
+{
+}
